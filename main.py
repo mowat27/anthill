@@ -4,6 +4,10 @@ from types import FunctionType
 from typing import Any, Callable, NoReturn
 
 
+type State = dict[str, Any]
+type AgentRunner = Callable[[Mission, State], State]
+
+
 def fail_and_exit(message: str, *, exit_code: int = 1) -> NoReturn:
     print(message, file=sys.stderr)
     exit(exit_code)
@@ -15,10 +19,9 @@ class UnknownWorkflowError(Exception):
 
 
 class MissionSource:
-    def __init__(self, type: str, workflow_name: str, opts: dict[str, Any] | None = None) -> None:
+    def __init__(self, type: str, workflow_name: str) -> None:
         self.type = type
         self.workflow_name = workflow_name
-        self.opts = opts if opts is not None else {}
 
     def report_progress(self, mission_id: str, message: str, **opts: Any) -> None:
         message = f"[{self.workflow_name}, {mission_id}] {message}"
@@ -29,9 +32,14 @@ class MissionSource:
 
 
 class Mission:
-    def __init__(self, mission_source: MissionSource) -> None:
+    def __init__(self, mission_source: MissionSource, *, initial_state: State = {}) -> None:
         self.id: str = uuid.uuid4().hex[:8]
         self.mission_source = mission_source
+        self.initial_state = initial_state
+
+    @property
+    def workflow_name(self):
+        return self.mission_source.workflow_name
 
     def report_progress(self, message: str) -> None:
         self.mission_source.report_progress(self.id, message)
@@ -43,10 +51,6 @@ class Mission:
         fail_and_exit(message)
 
 
-type State = dict[str, Any]
-type AgentRunner = Callable[[Mission, State], State]
-
-
 class App:
     def __init__(self) -> None:
         self._hooks: dict[str, list[FunctionType]] = {"before": []}
@@ -54,41 +58,37 @@ class App:
         self.runnables: dict[str, AgentRunner] = {}
 
     def before(self, fn: FunctionType) -> FunctionType:
-        def setup_step(mission: Mission, initial_value: Any = None) -> State:
-            return fn(mission, initial_value)
+        def setup_step(state, mission: Mission) -> State:
+            return fn(state, mission)
         self._hooks["before"].append(setup_step)
         return setup_step
 
-    def agent(self, fn: FunctionType) -> AgentRunner:
-        def agent_runner(mission: Mission, state: State) -> State:
+    def agent(self, fn: FunctionType) -> None:
+        def _agent_fn(mission: Mission, state: State) -> State:
             return fn(mission, state)
 
-        self.runnables[fn.__name__] = agent_runner
-        return agent_runner
+        self.runnables[fn.__name__] = _agent_fn
 
-    def workflow(self, fn: FunctionType) -> FunctionType:
+    def workflow(self, fn: FunctionType) -> None:
         def workflow_runner(mission: Mission) -> list[str]:
             return fn(mission)
 
         self.workflows[fn.__name__] = fn
-        return workflow_runner
 
-    def _setup(self, mission: Mission, initial_value: Any) -> State:
-        state: State = {}
+    def _setup(self, mission: Mission) -> State:
+        state: State = mission.initial_state
         for fn in self._hooks["before"]:
-            mission.report_progress(
-                f"Running before hook: {fn.__name__}")
-            state = fn(mission, initial_value)
+            state = fn(state, mission)
         return state
 
-    def run(self, mission: Mission, initial_value: Any = None) -> State:
+    def run(self, mission: Mission) -> State:
         workflow_name = mission.mission_source.workflow_name
         if workflow_name not in self.workflows:
             raise UnknownWorkflowError(workflow_name)
 
         workflow = self.workflows[workflow_name]
 
-        state = self._setup(mission, initial_value)
+        state = self._setup(mission)
         for step_name in workflow(mission):
             if step_name not in self.runnables:
                 fail_and_exit(f"Unknown step: {step_name}")
@@ -106,10 +106,10 @@ app = App()
 
 
 @app.before
-def init_state(_mission: Mission, initial_value: Any = None) -> State:
-    return {
-        "result": int(initial_value) if initial_value else 0
-    }
+def init_state(state, mission: Mission) -> State:
+    mission.report_progress(f"Initializing state")
+    return {**state, **{"mission_id": mission.id,
+                        "workflow_name": mission.workflow_name}}
 
 
 @app.agent
@@ -142,11 +142,12 @@ def plus_1_times_2_times_2(_mission: Mission) -> list[str]:
 
 def main(workflow_name: str, initial_value: int) -> None:
     mission_source = MissionSource("cli", workflow_name)
-    mission = Mission(mission_source)
+    mission = Mission(mission_source, initial_state={"result": initial_value})
 
     try:
-        result = app.run(mission, initial_value)
-        print(result["result"])
+        result = app.run(mission)
+        print(
+            f"STATUS : {result["workflow_name"]} ({result["mission_id"]}) returned: {result["result"]}")
     except UnknownWorkflowError as ex:
         mission.report_error(str(ex))
         exit(1)
