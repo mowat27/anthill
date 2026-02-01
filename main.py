@@ -2,6 +2,17 @@ import sys
 import uuid
 
 
+def always(value):
+    def thunk(*_args, **_vargs):
+        return value
+    return thunk
+
+
+def fail_and_exit(message, *, exit_code=1):
+    print(message, file=sys.stderr)
+    exit(exit_code)
+
+
 class MissionSource:
     def __init__(self, type, workflow_name, opts={}):
         self.type = type
@@ -9,9 +20,9 @@ class MissionSource:
         self.mission_id = uuid.uuid4().hex[:8]
         self.opts = opts
 
-    def report_progress(self, message, *, opts={}):
+    def report_progress(self, message, **opts):
         message = f"[{self.workflow_name}, {self.mission_id}] {message}"
-        print(message, {**opts, **{"flush": True}})
+        print(message, flush=True, **opts)
 
     def report_error(self, message):
         self.report_progress(message, file=sys.stderr)
@@ -24,16 +35,8 @@ class Mission:
         self.state = {}
         self.steps = []
 
-
-def always(value):
-    def thunk(*_args, **_vargs):
-        return value
-    return thunk
-
-
-def fail(message, *, exit_code=1):
-    print(message, file=sys.stderr)
-    exit(exit_code)
+    def fail(self, message):
+        fail_and_exit(message)
 
 
 class App:
@@ -42,9 +45,9 @@ class App:
         self.setup_state = always({})
 
     def init_state(self, fn):
-        def initializer(mission):
+        def initializer(mission, initial_value=None):
             mission.mission_source.report_progress("Initializing state")
-            return fn(mission)
+            return fn(mission, initial_value)
 
         self.setup_state = initializer
         return initializer
@@ -57,17 +60,18 @@ class App:
         self.runnables[fn.__name__] = agent_runner
         return agent_runner
 
-    def run(self, mission):
-        state = self.setup_state(mission)
+    def run(self, mission, initial_value=None):
+        state = self.setup_state(mission, initial_value)
         for step_name in mission.steps:
+            print(state)
             if step_name not in self.runnables:
-                fail(f"Unknown step: {step_name}")
+                fail_and_exit(f"Unknown step: {step_name}")
 
             runnable = self.runnables[step_name]
             state = runnable(mission, state)
 
             if state is None:
-                fail("Agent returned invalid state: None")
+                fail_and_exit("Agent returned invalid state: None")
 
         return state
 
@@ -76,9 +80,9 @@ app = App()
 
 
 @app.init_state
-def init_state(mission):
+def init_state(mission, initial_value=None):
     return {
-        "result": 0
+        "result": int(initial_value) if initial_value else 0
     }
 
 
@@ -95,21 +99,29 @@ def times_2(mission, state):
 
 
 @app.agent
-def failing_agent(mission, state):
+def simulate_failure(mission, state):
     mission.mission_source.report_error("simulating a failure")
-    mission.fail()
+    mission.fail("Workflow failed")
 
 
-def main():
-    mission_source = MissionSource("cli", "plus_one_times_2")
+def main(workflow_name, initial_value):
+    mission_source = MissionSource("cli", workflow_name)
     mission = Mission(mission_source)
-    mission.steps = ["plus_1", "times_2"]
 
-    print(app.run(mission))
+    if workflow_name == 'plus_1_times_2':
+        mission.steps = ["plus_1", "times_2"]
+    elif workflow_name == 'plus_1_times_2_times_2':
+        mission.steps = ["plus_1", "times_2", "simulate_failure", "times_2"]
+    else:
+        fail_and_exit(f"Unknown workflow: {workflow_name}")
+
+    print(app.run(mission, initial_value)["result"])
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 1:
-        fail("Missing argument: workflow_name")
+    if len(sys.argv) < 2:
+        fail_and_exit("Missing argument: workflow_name")
 
-    main()
+    workflow_name = sys.argv[1]
+    initial_value = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    main(workflow_name, initial_value)
