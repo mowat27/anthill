@@ -1,10 +1,14 @@
 import sys
-import uuid
+
+from mission_source import MissionSource
+from mission import Mission
+
 from types import FunctionType
-from typing import Any, Callable, NoReturn
+from typing import Callable, NoReturn
+from domain import State
 
 
-type State = dict[str, Any]
+
 type AgentRunner = Callable[[Mission, State], State]
 
 
@@ -16,39 +20,6 @@ def fail_and_exit(message: str, *, exit_code: int = 1) -> NoReturn:
 class UnknownWorkflowError(Exception):
     def __init__(self, workflow_name: str) -> None:
         super().__init__(f"Unknown workflow: {workflow_name}")
-
-
-class MissionSource:
-    def __init__(self, type: str, workflow_name: str) -> None:
-        self.type = type
-        self.workflow_name = workflow_name
-
-    def report_progress(self, mission_id: str, message: str, **opts: Any) -> None:
-        message = f"[{self.workflow_name}, {mission_id}] {message}"
-        print(message, flush=True, **opts)
-
-    def report_error(self, mission_id: str, message: str) -> None:
-        self.report_progress(mission_id, message, file=sys.stderr)
-
-
-class Mission:
-    def __init__(self, mission_source: MissionSource, *, initial_state: State = {}) -> None:
-        self.id: str = uuid.uuid4().hex[:8]
-        self.mission_source = mission_source
-        self.initial_state = initial_state
-
-    @property
-    def workflow_name(self):
-        return self.mission_source.workflow_name
-
-    def report_progress(self, message: str) -> None:
-        self.mission_source.report_progress(self.id, message)
-
-    def report_error(self, message: str) -> None:
-        self.mission_source.report_error(self.id, message)
-
-    def fail(self, message: str) -> NoReturn:
-        fail_and_exit(message)
 
 
 class App:
@@ -107,7 +78,7 @@ app = App()
 
 @app.before
 def init_state(state, mission: Mission) -> State:
-    mission.report_progress(f"Initializing state")
+    mission.report_progress("Initializing state")
     return {**state, **{"mission_id": mission.id,
                         "workflow_name": mission.workflow_name}}
 
