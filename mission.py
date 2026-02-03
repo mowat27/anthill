@@ -5,11 +5,11 @@ from mission_source import MissionSource
 from typing import NoReturn
 from domain import State
 
+
 class Mission:
-    def __init__(self, mission_source: MissionSource, *, initial_state: State = {}) -> None:
+    def __init__(self, mission_source: MissionSource) -> None:
         self.id: str = uuid.uuid4().hex[:8]
         self.mission_source = mission_source
-        self.initial_state = initial_state
 
     @property
     def workflow_name(self):
