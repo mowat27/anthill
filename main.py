@@ -1,6 +1,4 @@
 import sys
-from operator import methodcaller
-from contextlib import contextmanager
 
 from mission_source import MissionSource
 from mission import Mission
@@ -8,32 +6,9 @@ from mission import Mission
 from typing import Callable, NoReturn
 from domain import State
 
-# -- Core ----------------------------------------------------------------------
-
-
-class App:
-    @contextmanager
-    def workflow(self):
-        workflow = []
-
-        def runner(mission, state=None) -> State:
-            if state is None:
-                state = mission.initial_state
-
-            for step in workflow:
-                state = step(mission, state)
-            return state
-
-        yield (workflow, runner)
-
+from core import App, run_workflow
 
 app = App()
-
-
-def def_workflow(app: App, steps: list[Callable] = []):
-    with app.workflow() as (_steps, runner):
-        _steps.extend(steps)
-        return runner
 
 # -- Agents --------------------------------------------------------------------
 
@@ -61,10 +36,14 @@ def simulate_failure(mission: Mission, _state: State) -> State | NoReturn:
     mission.fail("Workflow failed")
 
 
-# -- Agents --------------------------------------------------------------------
+def plus_1_times_2(mission: Mission, state: State) -> State | NoReturn:
+    return run_workflow(mission, state, [init_state, plus_1, times_2])
 
-plus_1_times_2 = def_workflow(app, [init_state, plus_1, times_2])
-plus_1_times_2_times_2 = def_workflow(app, [plus_1_times_2, times_2])
+
+def plus_1_times_2_times_2(mission: Mission, state: State):
+    return run_workflow(mission, state, [plus_1_times_2, times_2])
+
+# -- Main ----------------------------------------------------------------------
 
 
 def main(workflow: Callable, initial_value: int) -> None:
@@ -83,8 +62,11 @@ def main(workflow: Callable, initial_value: int) -> None:
 
 
 def resolve_workflow_name(workflow_name):
-    this = sys.modules[__name__]
-    return this.__dict__[workflow_name]
+    result = globals().get(workflow_name)
+    if result:
+        return result
+
+    raise ValueError(f"Unknown workflow: {workflow_name}")
 
 
 if __name__ == "__main__":
@@ -95,6 +77,10 @@ if __name__ == "__main__":
     workflow_name = sys.argv[1]
     initial_value = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
-    workflow = resolve_workflow_name(workflow_name)
+    try:
+        workflow = resolve_workflow_name(workflow_name)
+    except ValueError as ex:
+        print(str(ex))
+        exit(1)
 
     main(workflow, initial_value)
