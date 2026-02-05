@@ -1,7 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(uv run:*)"
-    ]
+    "allow": ["Bash(uv run:*)", "Bash(python -c:*)"]
   }
 }

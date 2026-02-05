@@ -54,15 +54,13 @@ def plus_1_times_2_times_2(mission: Mission, state: State):
 
 def main(workflow: Callable, initial_value: int) -> None:
     mission_source = MissionSource("cli", workflow.__name__)
-    mission = Mission(mission_source)
+    mission = Mission(app, mission_source)
 
     initial_state = {
-        "mission_id": mission.id,
-        "workflow_name": mission.workflow_name,
         "result": initial_value
     }
 
-    result = workflow(mission, initial_state)
+    result = mission.run(initial_state)
     print(
         f"STATUS : {result["workflow_name"]} ({result["mission_id"]}) returned: {result["result"]}")
 

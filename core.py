@@ -1,7 +1,11 @@
-from typing import Callable, NoReturn
+from __future__ import annotations
+
+from typing import Callable, NoReturn, TYPE_CHECKING
 
 from domain import State
-from mission import Mission
+
+if TYPE_CHECKING:
+    from mission import Mission
 
 
 # -- Core ----------------------------------------------------------------------

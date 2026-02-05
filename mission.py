@@ -4,16 +4,30 @@ import uuid
 from mission_source import MissionSource
 from typing import NoReturn
 from domain import State
+from core import App
 
 
 class Mission:
-    def __init__(self, mission_source: MissionSource) -> None:
+    def __init__(self, app: App, mission_source: MissionSource) -> None:
         self.id: str = uuid.uuid4().hex[:8]
         self.mission_source = mission_source
+        self.app = app
+
+    def run(self, initial_state: State = {}) -> State:
+        state = {**{
+            "mission_id": self.id,
+            "workflow_name": self.workflow_name,
+        }, **initial_state}
+
+        return self.workflow(self, state)
 
     @property
     def workflow_name(self):
         return self.mission_source.workflow_name
+
+    @property
+    def workflow(self):
+        return self.app.get_handler(self.workflow_name)
 
     def report_progress(self, message: str) -> None:
         self.mission_source.report_progress(self.id, message)
