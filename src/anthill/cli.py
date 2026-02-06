@@ -1,3 +1,7 @@
+"""Command-line interface for Anthill workflow framework.
+
+Provides the main entry point for running Anthill workflows from the command line.
+"""
 import argparse
 import importlib.util
 import sys
@@ -7,6 +11,17 @@ from anthill.core.runner import Runner
 
 
 def load_app(path: str):
+    """Dynamically load an Anthill app from a Python file.
+
+    Args:
+        path: File path to the Python module containing the app.
+
+    Returns:
+        The app object from the loaded module.
+
+    Raises:
+        FileNotFoundError: If the file cannot be found or loaded.
+    """
     spec = importlib.util.spec_from_file_location("agents", path)
     if spec is None or spec.loader is None:
         raise FileNotFoundError(path)
@@ -16,6 +31,17 @@ def load_app(path: str):
 
 
 def parse_state_pairs(pairs: list[str]) -> dict[str, str]:
+    """Parse command-line state pairs into a dictionary.
+
+    Args:
+        pairs: List of strings in "key=value" format.
+
+    Returns:
+        Dictionary mapping keys to values.
+
+    Raises:
+        SystemExit: If any pair is not in "key=value" format.
+    """
     state = {}
     for pair in pairs:
         if "=" not in pair:
@@ -27,6 +53,11 @@ def parse_state_pairs(pairs: list[str]) -> dict[str, str]:
 
 
 def main():
+    """Main entry point for the Anthill CLI.
+
+    Parses command-line arguments and executes the requested workflow.
+    Supports the 'run' command with agents file and initial state configuration.
+    """
     parser = argparse.ArgumentParser(prog="anthill")
     subparsers = parser.add_subparsers(dest="command")
 

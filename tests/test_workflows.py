@@ -1,3 +1,9 @@
+"""Core workflow execution tests.
+
+Tests the framework's ability to execute single handlers, multi-step workflows,
+error handling, and handler resolution.
+"""
+
 import pytest
 
 from anthill.core.app import App, run_workflow
@@ -6,6 +12,7 @@ from anthill.core.domain import State
 
 class TestWorkflows:
     def test_single_handler(self, runner_factory):
+        """Test execution of a workflow with a single handler."""
         app = App()
 
         @app.handler
@@ -19,6 +26,7 @@ class TestWorkflows:
         assert source.progress_messages == ["adding 1"]
 
     def test_multi_step_workflow(self, runner_factory):
+        """Test execution of a workflow composed of multiple sequential handlers."""
         app = App()
 
         @app.handler
@@ -41,6 +49,7 @@ class TestWorkflows:
         assert source.progress_messages == ["adding 1", "doubling"]
 
     def test_failure(self, runner_factory):
+        """Test that workflow failure is propagated correctly via SystemExit."""
         app = App()
 
         @app.handler
@@ -54,6 +63,7 @@ class TestWorkflows:
         assert source.error_messages == ["something broke"]
 
     def test_unknown_workflow(self, runner_factory):
+        """Test that attempting to run an unregistered handler raises ValueError."""
         app = App()
         runner, _source = runner_factory(app, "nonexistent")
         with pytest.raises(ValueError, match="Unknown handler: nonexistent"):
