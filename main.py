@@ -3,7 +3,7 @@ import sys
 from anthill.channels.cli import CliChannel
 from anthill.core.runner import Runner
 
-from typing import Callable, NoReturn
+from typing import NoReturn
 from anthill.core.domain import State
 
 from anthill.core.app import App, run_workflow
@@ -52,8 +52,8 @@ def plus_1_times_2_times_2(runner: Runner, state: State):
 # -- Main ----------------------------------------------------------------------
 
 
-def main(workflow: Callable, initial_value: int) -> None:
-    channel = CliChannel("cli", workflow.__name__)
+def main(workflow_name: str, initial_value: int) -> None:
+    channel = CliChannel("cli", workflow_name)
     runner = Runner(app, channel)
 
     initial_state = {
@@ -74,9 +74,9 @@ if __name__ == "__main__":
     initial_value = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
     try:
-        workflow = app.get_handler(workflow_name)
+        app.get_handler(workflow_name)
     except ValueError as ex:
         print(str(ex))
         exit(1)
 
-    main(workflow, initial_value)
+    main(workflow_name, initial_value)

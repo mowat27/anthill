@@ -3,13 +3,12 @@ import uuid
 
 from typing import NoReturn
 
-from anthill.channels.cli import CliChannel
-from anthill.core.domain import State
+from anthill.core.domain import State, Channel
 from anthill.core.app import App
 
 
 class Runner:
-    def __init__(self, app: App, channel: CliChannel) -> None:
+    def __init__(self, app: App, channel: Channel) -> None:
         self.id: str = uuid.uuid4().hex[:8]
         self.channel = channel
         self.app = app
