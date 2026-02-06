@@ -1,10 +1,10 @@
 import sys
 import uuid
 
-from mission_source import MissionSource
+from anthill.sources.cli import MissionSource
 from typing import NoReturn
-from domain import State
-from core import App
+from anthill.core.domain import State
+from anthill.core.app import App
 
 
 class Mission:

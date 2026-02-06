@@ -1,12 +1,12 @@
 import sys
 
-from mission_source import MissionSource
-from mission import Mission
+from anthill.sources.cli import MissionSource
+from anthill.core.mission import Mission
 
 from typing import Callable, NoReturn
-from domain import State
+from anthill.core.domain import State
 
-from core import App, run_workflow
+from anthill.core.app import App, run_workflow
 
 app = App()
 

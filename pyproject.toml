@@ -1,7 +1,11 @@
 [project]
-name = "army-poc"
+name = "anthill"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["ruff", "ty"]
+
+[build-system]
+requires = ["uv_build>=0.7.2,<0.8"]
+build-backend = "uv_build"

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Callable, NoReturn, TYPE_CHECKING
 
-from domain import State
+from anthill.core.domain import State
 
 if TYPE_CHECKING:
-    from mission import Mission
+    from anthill.core.mission import Mission
 
 
 # -- Core ----------------------------------------------------------------------
