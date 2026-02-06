@@ -13,11 +13,8 @@ class Runner:
         self.channel = channel
         self.app = app
 
-    def run(self, initial_state: State = {}) -> State:
-        state = {**{
-            "run_id": self.id,
-            "workflow_name": self.workflow_name,
-        }, **initial_state}
+    def run(self) -> State:
+        state = {**self.channel.initial_state, "run_id": self.id, "workflow_name": self.workflow_name}
 
         return self.workflow(self, state)
 

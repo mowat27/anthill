@@ -13,8 +13,8 @@ class TestWorkflows:
             runner.report_progress("adding 1")
             return {**state, "result": state["result"] + 1}
 
-        runner, source = runner_factory(app, "add_1")
-        result = runner.run({"result": 10})
+        runner, source = runner_factory(app, "add_1", {"result": 10})
+        result = runner.run()
         assert result["result"] == 11
         assert source.progress_messages == ["adding 1"]
 
@@ -35,8 +35,8 @@ class TestWorkflows:
         def add_1_then_double(runner, state: State) -> State:
             return run_workflow(runner, state, [add_1, double])
 
-        runner, source = runner_factory(app, "add_1_then_double")
-        result = runner.run({"result": 10})
+        runner, source = runner_factory(app, "add_1_then_double", {"result": 10})
+        result = runner.run()
         assert result["result"] == 22
         assert source.progress_messages == ["adding 1", "doubling"]
 
@@ -48,13 +48,13 @@ class TestWorkflows:
             runner.report_error("something broke")
             runner.fail("Workflow failed")
 
-        runner, source = runner_factory(app, "blow_up")
+        runner, source = runner_factory(app, "blow_up", {"result": 1})
         with pytest.raises(SystemExit):
-            runner.run({"result": 1})
+            runner.run()
         assert source.error_messages == ["something broke"]
 
     def test_unknown_workflow(self, runner_factory):
         app = App()
         runner, _source = runner_factory(app, "nonexistent")
         with pytest.raises(ValueError, match="Unknown handler: nonexistent"):
-            runner.run({})
+            runner.run()
