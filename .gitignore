@@ -10,3 +10,4 @@ wheels/
 .venv
 
 tmp/
+.claude/settings.local.json
