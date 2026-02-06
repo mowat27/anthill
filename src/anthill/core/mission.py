@@ -1,14 +1,14 @@
 import sys
 import uuid
 
-from anthill.sources.cli import MissionSource
+from anthill.sources.cli import CliMissionSource
 from typing import NoReturn
 from anthill.core.domain import State
 from anthill.core.app import App
 
 
 class Mission:
-    def __init__(self, app: App, mission_source: MissionSource) -> None:
+    def __init__(self, app: App, mission_source: CliMissionSource) -> None:
         self.id: str = uuid.uuid4().hex[:8]
         self.mission_source = mission_source
         self.app = app

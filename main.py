@@ -1,6 +1,6 @@
 import sys
 
-from anthill.sources.cli import MissionSource
+from anthill.sources.cli import CliMissionSource
 from anthill.core.mission import Mission
 
 from typing import Callable, NoReturn
@@ -53,7 +53,7 @@ def plus_1_times_2_times_2(mission: Mission, state: State):
 
 
 def main(workflow: Callable, initial_value: int) -> None:
-    mission_source = MissionSource("cli", workflow.__name__)
+    mission_source = CliMissionSource("cli", workflow.__name__)
     mission = Mission(app, mission_source)
 
     initial_state = {

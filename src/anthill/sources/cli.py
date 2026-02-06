@@ -1,7 +1,7 @@
 import sys
 from typing import Any
 
-class MissionSource:
+class CliMissionSource:
     def __init__(self, type: str, workflow_name: str) -> None:
         self.type = type
         self.workflow_name = workflow_name
