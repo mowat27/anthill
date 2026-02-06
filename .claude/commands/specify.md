@@ -96,8 +96,7 @@ agent's research out of your context window while giving you simple sequential/p
 
 **Execution pipeline:**
 
-1. Spawn a **Designer** agent (blocking Task, subagent_type: general-purpose). It researches the codebase, designs the solution, and
-returns a concise summary. Do NOT spawn it in the background.
+1. Spawn a **Designer** agent (blocking Task, subagent_type: general-purpose). It researches the codebase, designs the solution, and returns a concise summary. Do NOT spawn it in the background.
 2. Once the Designer returns, spawn these **in parallel** as blocking Task calls:
     - **Tester** (subagent_type: general-purpose) — designs test cases based on the Designer's output
     - **Craig** (subagent_type: craig) — assesses the Designer's output for simplicity
