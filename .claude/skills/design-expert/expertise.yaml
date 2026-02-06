@@ -1,0 +1,184 @@
+# Anthill Framework - Design Expertise
+# Mental model for the anthill workflow engine
+# Last validated: 2026-02-06
+
+overview:
+  name: anthill
+  purpose: >
+    Lightweight Python workflow engine. Users define handlers (workflow steps)
+    via a decorator-based App, wire them to a Channel (I/O boundary), and
+    execute through a Runner. Designed for composable, testable pipelines.
+  python: ">=3.12"
+  build: uv (uv_build backend)
+  entry_point: "anthill.cli:main"
+  quality_tools:
+    - ruff (lint)
+    - ty (type-check)
+    - pytest (test)
+  justfile_default: "check -> ruff, ty, test"
+
+architecture:
+  layers:
+    - name: core
+      path: src/anthill/core/
+      responsibility: >
+        Framework kernel. Contains domain types, the App handler registry,
+        the Runner execution engine, and the run_workflow composition helper.
+      modules:
+        - domain.py
+        - app.py
+        - runner.py
+
+    - name: channels
+      path: src/anthill/channels/
+      responsibility: >
+        I/O boundary adapters. Each channel satisfies the Channel protocol
+        and owns how progress/errors are reported and what initial state is
+        supplied. Channels are the seam where tests swap in doubles.
+      modules:
+        - cli.py
+
+    - name: cli
+      path: src/anthill/cli.py
+      responsibility: >
+        Argparse-based CLI entry point. Loads a user-supplied agents file
+        (Python module exporting `app`), builds a CliChannel, and runs
+        the workflow via Runner.
+
+domain_types:
+  State:
+    file: src/anthill/core/domain.py
+    definition: "type State = dict[str, Any]"
+    notes: >
+      Type alias. All workflow state is a flat string-keyed dict. Handlers
+      receive and return State; Runner injects run_id and workflow_name.
+
+  Channel:
+    file: src/anthill/core/domain.py
+    definition: Protocol
+    attributes:
+      - "type: str"
+      - "workflow_name: str"
+      - "initial_state: State"
+    methods:
+      - "report_progress(run_id: str, message: str, **opts: Any) -> None"
+      - "report_error(run_id: str, message: str) -> None"
+    notes: >
+      Structural (duck-typed) protocol. Any object with these attrs/methods
+      qualifies. This is the primary extension point for new I/O adapters.
+
+core_objects:
+  App:
+    file: src/anthill/core/app.py
+    responsibility: Handler registry keyed by function name.
+    interface:
+      - "handler(fn) -> wrapper  # decorator that registers fn by fn.__name__"
+      - "get_handler(name) -> Callable[[Runner, State], State | NoReturn]"
+    design_constraint: >
+      get_handler raises ValueError for unknown names. The decorator stores
+      the original fn (not the wrapper) in self.handlers.
+
+  Runner:
+    file: src/anthill/core/runner.py
+    responsibility: >
+      Execution engine. Binds an App + Channel, generates a run_id, and
+      drives the workflow lifecycle.
+    construction: "Runner(app: App, channel: Channel)"
+    interface:
+      - "run() -> State  # merges channel.initial_state with run_id/workflow_name, calls workflow"
+      - "workflow_name: property  # delegates to channel.workflow_name"
+      - "workflow: property  # resolves handler via app.get_handler(workflow_name)"
+      - "report_progress(message) -> None  # delegates to channel"
+      - "report_error(message) -> None  # delegates to channel"
+      - "fail(message) -> NoReturn  # prints to stderr, exits(1)"
+    design_constraint: >
+      run_id is uuid4 hex[:8]. Runner.run() builds initial state by
+      spreading channel.initial_state then adding run_id and workflow_name.
+      The workflow handler receives (runner, state) and returns State.
+
+  run_workflow:
+    file: src/anthill/core/app.py
+    signature: "run_workflow(runner: Runner, state: State, steps: list[Callable]) -> State"
+    responsibility: >
+      Sequential composition helper. Folds state through a list of handler
+      callables. Used inside composite handlers to chain sub-steps.
+
+channel_implementations:
+  CliChannel:
+    file: src/anthill/channels/cli.py
+    satisfies: Channel protocol
+    construction: "CliChannel(workflow_name: str, initial_state: dict[str,str] | None = None)"
+    behavior:
+      type: '"cli"'
+      initial_state: "Copies input dict or defaults to {}"
+      report_progress: "Prints formatted [workflow_name, run_id] message to stdout"
+      report_error: "Delegates to report_progress with file=sys.stderr"
+
+cli_entry_point:
+  file: src/anthill/cli.py
+  subcommands:
+    run:
+      args:
+        - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
+        - "--initial-state key=val (repeatable) — seed state pairs"
+        - "prompt (positional) — workflow name to invoke"
+      flow: >
+        1. load_app() dynamically imports the agents file via importlib
+        2. parse_state_pairs() splits key=val strings into dict
+        3. Builds CliChannel with workflow_name=prompt, initial_state=dict
+        4. Creates Runner(app, channel) and calls runner.run()
+        5. Prints result dict to stdout
+      error_handling:
+        - "FileNotFoundError → agents file not found"
+        - "AttributeError → agents file has no 'app'"
+        - "Invalid state pair (no '=') → stderr + exit(1)"
+  no_subcommand: "Prints help and exits 0"
+
+data_flow:
+  happy_path:
+    - "CLI parses args → loads agents file → gets App"
+    - "Builds CliChannel(workflow_name, initial_state)"
+    - "Runner(app, channel).run()"
+    - "Runner merges initial_state + {run_id, workflow_name}"
+    - "Handler(runner, state) → new State"
+    - "For composites: run_workflow folds state through sub-handlers"
+    - "Result state printed to stdout"
+  error_path:
+    - "Unknown handler → ValueError from App.get_handler"
+    - "Handler calls runner.fail(msg) → stderr + SystemExit(1)"
+    - "Handler calls runner.report_error(msg) → channel.report_error → stderr"
+
+testing_design:
+  philosophy: >
+    Test the framework, not app logic. Each test owns its setup. Replace
+    I/O at the channel boundary with capturing doubles.
+  test_channel:
+    file: tests/conftest.py
+    class: TestChannel
+    satisfies: Channel protocol (duck-typed)
+    captures:
+      - "progress_messages: list[str]"
+      - "error_messages: list[str]"
+  fixture:
+    name: runner_factory
+    signature: "(app, workflow_name, initial_state=None) -> (Runner, TestChannel)"
+  test_files:
+    - tests/test_workflows.py — core engine paths (single, multi-step, failure, unknown)
+    - tests/test_cli_channel.py — CliChannel initial_state and attribute tests
+    - tests/test_cli.py — CLI arg parsing and integration (temp agents file)
+
+key_design_decisions:
+  - >
+    Channel is a Protocol, not an ABC. Extensions use structural subtyping.
+  - >
+    Handlers receive (runner, state) and return State. Runner is the only
+    framework object a handler interacts with.
+  - >
+    State is always a new dict (spread pattern). No mutation of incoming state.
+  - >
+    run_workflow enables composition without inheritance or a DAG scheduler.
+    Handlers that orchestrate other handlers just call run_workflow with a
+    step list.
+  - >
+    The CLI dynamically loads user code via importlib. The agents file must
+    export a module-level `app` object.
