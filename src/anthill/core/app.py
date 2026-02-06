@@ -5,7 +5,7 @@ from typing import Callable, NoReturn, TYPE_CHECKING
 from anthill.core.domain import State
 
 if TYPE_CHECKING:
-    from anthill.core.mission import Mission
+    from anthill.core.runner import Runner
 
 
 # -- Core ----------------------------------------------------------------------
@@ -16,20 +16,20 @@ class App:
         self.handlers = {}
 
     def handler(self, fn):
-        def runner(mission: Mission, state: State) -> State | NoReturn:
-            return fn(mission, state)
+        def wrapper(runner: Runner, state: State) -> State | NoReturn:
+            return fn(runner, state)
 
         self.handlers[fn.__name__] = fn
-        return runner
+        return wrapper
 
-    def get_handler(self, name: str) -> Callable[[Mission, State], State | NoReturn]:
+    def get_handler(self, name: str) -> Callable[[Runner, State], State | NoReturn]:
         try:
             return self.handlers[name]
-        except KeyError as ex:
+        except KeyError:
             raise ValueError(f"Unknown handler: {name}")
 
 
-def run_workflow(mission: Mission, state: State, steps: list[Callable]):
+def run_workflow(runner: Runner, state: State, steps: list[Callable]):
     for step in steps:
-        state = step(mission, state)
+        state = step(runner, state)
     return state
