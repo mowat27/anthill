@@ -10,11 +10,11 @@ import re
 from dataclasses import dataclass, field
 
 import httpx
-from fastapi import FastAPI, Request
 
 from anthill.channels.slack import SlackChannel
 from anthill.core.app import App
 from anthill.core.runner import Runner
+from anthill.http import run_workflow_background
 
 logger = logging.getLogger("anthill.http.slack_events")
 
@@ -101,29 +101,123 @@ async def slack_api(token: str, method: str, payload: dict) -> dict:
         return resp.json()
 
 
-def setup_slack_routes(api: FastAPI, anthill_app: App) -> None:
-    """Register Slack event handling endpoint on the FastAPI application.
+class SlackEventProcessor:
+    def __init__(self, anthill_app: App) -> None:
+        self._app = anthill_app
+        self._pending: dict[tuple[str, str], PendingMessage] = {}
 
-    Creates a POST /slack_event endpoint that handles Slack Events API callbacks.
-    Implements debounced message processing with support for message edits,
-    thread replies, and deletions.
+    async def handle_event(self, body: dict) -> dict:
+        if body.get("type") == "url_verification":
+            return {"challenge": body["challenge"]}
 
-    Args:
-        api: FastAPI application instance to register routes on.
-        anthill_app: Anthill App instance containing registered workflow handlers.
+        event = body.get("event", {})
+        if not event:
+            return {"ok": True}
 
-    Environment Variables:
-        SLACK_BOT_TOKEN: Slack bot OAuth token for API calls.
-        SLACK_BOT_USER_ID: Slack user ID of the bot for mention detection.
-        SLACK_COOLDOWN_SECONDS: Debounce timer duration in seconds (default: 30).
-    """
-    from anthill.server import _run_workflow
+        if is_bot_message(event):
+            return {"ok": True}
 
-    pending: dict[tuple[str, str], PendingMessage] = {}
+        token = os.environ.get("SLACK_BOT_TOKEN", "")
+        bot_user_id = os.environ.get("SLACK_BOT_USER_ID", "")
+        cooldown = float(os.environ.get("SLACK_COOLDOWN_SECONDS", "30"))
 
-    async def _on_timer_fire(key: tuple[str, str], token: str, cooldown: float) -> None:
+        channel_id = event.get("channel", "")
+        event_ts = event.get("ts", "")
+
+        if event.get("thread_ts") and event["ts"] != event["thread_ts"]:
+            return await self._handle_thread_reply(event, channel_id, event_ts, token, cooldown)
+
+        if event.get("subtype") == "message_changed":
+            return await self._handle_edit(event, channel_id, token, cooldown)
+
+        if event.get("subtype") == "message_deleted":
+            return self._handle_delete(event, channel_id)
+
+        event_type = event.get("type", "")
+        subtype = event.get("subtype")
+        if event_type in ("app_mention", "message") and subtype in (None, "file_share"):
+            return await self._handle_mention(event, channel_id, event_ts, bot_user_id, token, cooldown)
+
+        return {"ok": True}
+
+    async def _handle_thread_reply(self, event: dict, channel_id: str, event_ts: str, token: str, cooldown: float) -> dict:
+        key = (channel_id, event["thread_ts"])
+        if key in self._pending:
+            entry = self._pending[key]
+            if entry.timer_task:
+                entry.timer_task.cancel()
+            entry.text += "\n" + event.get("text", "")
+            entry.files.extend(event.get("files", []))
+            entry.timer_task = asyncio.create_task(
+                self._on_timer_fire(key, token, cooldown)
+            )
+            await slack_api(token, "reactions.add", {
+                "channel": channel_id,
+                "timestamp": event_ts,
+                "name": "thumbsup",
+            })
+        return {"ok": True}
+
+    async def _handle_edit(self, event: dict, channel_id: str, token: str, cooldown: float) -> dict:
+        nested = event.get("message", {})
+        key = (channel_id, nested.get("ts", ""))
+        if key in self._pending:
+            entry = self._pending[key]
+            if entry.timer_task:
+                entry.timer_task.cancel()
+            entry.text = strip_mention(nested.get("text", ""))
+            entry.timer_task = asyncio.create_task(
+                self._on_timer_fire(key, token, cooldown)
+            )
+        return {"ok": True}
+
+    def _handle_delete(self, event: dict, channel_id: str) -> dict:
+        key = (channel_id, event.get("deleted_ts", ""))
+        if key in self._pending:
+            entry = self._pending[key]
+            if entry.timer_task:
+                entry.timer_task.cancel()
+            del self._pending[key]
+        return {"ok": True}
+
+    async def _handle_mention(self, event: dict, channel_id: str, event_ts: str, bot_user_id: str, token: str, cooldown: float) -> dict:
+        text = event.get("text", "")
+        if is_bot_mention(text, bot_user_id):
+            clean_text = strip_mention(text)
+            parts = clean_text.split()
+            workflow_name = parts[0] if parts else ""
+
+            key = (channel_id, event_ts)
+            if key in self._pending:
+                return {"ok": True}
+
+            entry = PendingMessage(
+                channel_id=channel_id,
+                ts=event_ts,
+                user=event.get("user", ""),
+                text=clean_text,
+                files=event.get("files", []),
+                workflow_name=workflow_name,
+            )
+            self._pending[key] = entry
+
+            await slack_api(token, "reactions.add", {
+                "channel": channel_id,
+                "timestamp": event_ts,
+                "name": "thumbsup",
+            })
+
+            entry.timer_task = asyncio.create_task(
+                self._on_timer_fire(key, token, cooldown)
+            )
+
+            return {"ok": True}
+
+        return {"ok": True}
+
+    async def _on_timer_fire(self, key: tuple[str, str], token: str, cooldown: float) -> None:
         await asyncio.sleep(cooldown)
-        entry = pending.pop(key, None)
+        entry = self._pending.pop(key, None)
         if entry is None:
             return
 
@@ -134,7 +228,7 @@ def setup_slack_routes(api: FastAPI, anthill_app: App) -> None:
         })
 
         try:
-            anthill_app.get_handler(entry.workflow_name)
+            self._app.get_handler(entry.workflow_name)
         except ValueError:
             await slack_api(token, "chat.postMessage", {
                 "channel": entry.channel_id,
@@ -154,111 +248,5 @@ def setup_slack_routes(api: FastAPI, anthill_app: App) -> None:
             channel_id=entry.channel_id,
             thread_ts=entry.ts,
         )
-        runner = Runner(anthill_app, channel)
-        await asyncio.to_thread(_run_workflow, runner)
-
-    @api.post("/slack_event")
-    async def slack_event(request: Request):
-        body = await request.json()
-
-        # 1. URL verification
-        if body.get("type") == "url_verification":
-            return {"challenge": body["challenge"]}
-
-        # 2. Extract event
-        event = body.get("event", {})
-        if not event:
-            return {"ok": True}
-
-        # 3. Bot self-filter
-        if is_bot_message(event):
-            return {"ok": True}
-
-        token = os.environ.get("SLACK_BOT_TOKEN", "")
-        bot_user_id = os.environ.get("SLACK_BOT_USER_ID", "")
-        cooldown = float(os.environ.get("SLACK_COOLDOWN_SECONDS", "30"))
-
-        channel_id = event.get("channel", "")
-        event_ts = event.get("ts", "")
-
-        # 5. Thread reply (checked BEFORE mention)
-        if event.get("thread_ts") and event["ts"] != event["thread_ts"]:
-            key = (channel_id, event["thread_ts"])
-            if key in pending:
-                entry = pending[key]
-                if entry.timer_task:
-                    entry.timer_task.cancel()
-                entry.text += "\n" + event.get("text", "")
-                entry.files.extend(event.get("files", []))
-                entry.timer_task = asyncio.create_task(
-                    _on_timer_fire(key, token, cooldown)
-                )
-                await slack_api(token, "reactions.add", {
-                    "channel": channel_id,
-                    "timestamp": event_ts,
-                    "name": "thumbsup",
-                })
-            return {"ok": True}
-
-        # 6. Message edit
-        if event.get("subtype") == "message_changed":
-            nested = event.get("message", {})
-            key = (channel_id, nested.get("ts", ""))
-            if key in pending:
-                entry = pending[key]
-                if entry.timer_task:
-                    entry.timer_task.cancel()
-                entry.text = strip_mention(nested.get("text", ""))
-                entry.timer_task = asyncio.create_task(
-                    _on_timer_fire(key, token, cooldown)
-                )
-            return {"ok": True}
-
-        # 7. Message delete
-        if event.get("subtype") == "message_deleted":
-            key = (channel_id, event.get("deleted_ts", ""))
-            if key in pending:
-                entry = pending[key]
-                if entry.timer_task:
-                    entry.timer_task.cancel()
-                del pending[key]
-            return {"ok": True}
-
-        # 8. Bot mention (new message)
-        event_type = event.get("type", "")
-        subtype = event.get("subtype")
-        if event_type in ("app_mention", "message") and subtype in (None, "file_share"):
-            text = event.get("text", "")
-            if is_bot_mention(text, bot_user_id):
-                clean_text = strip_mention(text)
-                parts = clean_text.split()
-                workflow_name = parts[0] if parts else ""
-
-                key = (channel_id, event_ts)
-                if key in pending:
-                    return {"ok": True}
-
-                entry = PendingMessage(
-                    channel_id=channel_id,
-                    ts=event_ts,
-                    user=event.get("user", ""),
-                    text=clean_text,
-                    files=event.get("files", []),
-                    workflow_name=workflow_name,
-                )
-                pending[key] = entry
-
-                await slack_api(token, "reactions.add", {
-                    "channel": channel_id,
-                    "timestamp": event_ts,
-                    "name": "thumbsup",
-                })
-
-                entry.timer_task = asyncio.create_task(
-                    _on_timer_fire(key, token, cooldown)
-                )
-
-                return {"ok": True}
-
-        # 9. All other events
-        return {"ok": True}
+        runner = Runner(self._app, channel)
+        await asyncio.to_thread(run_workflow_background, runner)

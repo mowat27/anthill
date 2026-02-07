@@ -1,15 +1,13 @@
-"""Webhook endpoint for Anthill workflow triggers.
-
-Extracted from server.py to allow modular route registration.
-"""
+"""Webhook endpoint logic for Anthill workflow triggers."""
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from anthill.channels.api import ApiChannel
 from anthill.core.app import App
 from anthill.core.runner import Runner
+from anthill.http import run_workflow_background
 
 
 class WebhookRequest(BaseModel):
@@ -32,29 +30,13 @@ class WebhookResponse(BaseModel):
     run_id: str
 
 
-def setup_webhook_routes(api: FastAPI, anthill_app: App) -> None:
-    """Register webhook endpoint on the FastAPI application.
+async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, anthill_app: App) -> WebhookResponse:
+    try:
+        anthill_app.get_handler(request.workflow_name)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Unknown workflow: {request.workflow_name}")
 
-    Creates a POST /webhook endpoint that accepts workflow trigger requests
-    and executes them asynchronously in the background.
-
-    Args:
-        api: FastAPI application instance to register routes on.
-        anthill_app: Anthill App instance containing registered workflow handlers.
-
-    Raises:
-        HTTPException: 404 if the requested workflow name is not registered.
-    """
-    from anthill.server import _run_workflow
-
-    @api.post("/webhook", response_model=WebhookResponse)
-    async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks) -> WebhookResponse:
-        try:
-            anthill_app.get_handler(request.workflow_name)
-        except ValueError:
-            raise HTTPException(status_code=404, detail=f"Unknown workflow: {request.workflow_name}")
-
-        channel = ApiChannel(request.workflow_name, request.initial_state)
-        runner = Runner(anthill_app, channel)
-        background_tasks.add_task(_run_workflow, runner)
-        return WebhookResponse(run_id=runner.id)
+    channel = ApiChannel(request.workflow_name, request.initial_state)
+    runner = Runner(anthill_app, channel)
+    background_tasks.add_task(run_workflow_background, runner)
+    return WebhookResponse(run_id=runner.id)
