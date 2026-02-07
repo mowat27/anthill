@@ -16,6 +16,9 @@ from anthill.llm.claude_code import ClaudeCodeAgent
 app = App()
 
 
+# --- Steps ---
+
+
 @app.handler
 def specify(runner: Runner, state: State) -> State:
     """Generate a specification and extract spec_file and slug from the response."""
@@ -78,21 +81,6 @@ def document(runner: Runner, state: State) -> State:
     return {**state, "document_status": "complete"}
 
 
-SDLC_STEPS = [specify, branch, implement, document]
-
-
-@app.handler
-def sdlc(runner: Runner, state: State) -> State:
-    """Run the full SDLC workflow: specify -> branch -> implement -> document."""
-    return run_workflow(runner, state, SDLC_STEPS)
-
-
-@app.handler
-def specify_and_branch(runner: Runner, state: State) -> State:
-    """Run the full SDLC workflow: specify -> branch -> implement -> document."""
-    return run_workflow(runner, state, SDLC_STEPS[0:2])
-
-
 @app.handler
 def derive_feature(runner: Runner, state: State) -> State:
     """Derive feature type and slug from a prompt via LLM."""
@@ -111,7 +99,25 @@ def derive_feature(runner: Runner, state: State) -> State:
     return {**state, "feature_type": parsed["feature_type"], "slug": parsed["slug"]}
 
 
-SDLC_ISO_STEPS = [specify, implement, document]
+# --- Shared workflow constants ---
+
+
+SDLC_STEPS = [specify, branch, implement, document]
+
+
+# --- Workflows ---
+
+
+@app.handler
+def sdlc(runner: Runner, state: State) -> State:
+    """Run the full SDLC workflow: specify -> branch -> implement -> document."""
+    return run_workflow(runner, state, SDLC_STEPS)
+
+
+@app.handler
+def specify_and_branch(runner: Runner, state: State) -> State:
+    """Run partial SDLC workflow: specify -> branch."""
+    return run_workflow(runner, state, SDLC_STEPS[0:2])
 
 
 @app.handler
@@ -122,5 +128,5 @@ def sdlc_iso(runner: Runner, state: State) -> State:
     branch_name = f"{state['feature_type']}/{state['slug']}"
     wt = Worktree(base_dir=runner.app.worktree_dir, name=worktree_name)
     with git_worktree(wt, create=True, branch=branch_name, remove=False):
-        state = run_workflow(runner, state, SDLC_ISO_STEPS)
+        state = run_workflow(runner, state, [specify, implement, document])
     return {**state, "worktree_path": wt.path, "branch_name": branch_name}

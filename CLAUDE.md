@@ -18,5 +18,9 @@ Handlers: `def step(runner: Runner, state: State) -> State`. Chain via `run_work
 - One test per code path
 - `uv run -m pytest tests/ -v`
 
+## Handlers (handlers.py)
+- Organise as: **steps first**, then **shared constants**, then **workflows**
+- Constants (e.g. step lists) only when shared between multiple workflows; inline otherwise
+
 ## Dev
 `just` = lint+typecheck+test. `uv sync` to install.
