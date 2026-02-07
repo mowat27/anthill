@@ -13,6 +13,7 @@ Each Runner instance represents a single workflow execution.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
@@ -61,10 +62,16 @@ class Runner:
         self.channel = channel
         self.app = app
 
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+
         # Set up per-run file logger
         os.makedirs(app.log_dir, exist_ok=True)
-        log_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{self.id}.log"
+        log_filename = f"{timestamp}-{self.id}.log"
         log_path = os.path.join(app.log_dir, log_filename)
+
+        # Set up per-run state file
+        os.makedirs(app.state_dir, exist_ok=True)
+        self._state_path = os.path.join(app.state_dir, f"{timestamp}-{self.id}.json")
         self.logger = logging.getLogger(f"anthill.run.{self.id}")
         self.logger.setLevel(logging.DEBUG)
         file_handler = logging.FileHandler(log_path)
@@ -90,6 +97,7 @@ class Runner:
             Exception: Any exception raised by the workflow handler is logged and re-raised.
         """
         state = {**self.channel.initial_state, "run_id": self.id, "workflow_name": self.workflow_name}
+        self._persist_state(state)
 
         self.logger.info(f"Workflow started: {self.workflow_name}")
         self.logger.debug(f"Initial state: {state}")
@@ -98,6 +106,7 @@ class Runner:
         except Exception as e:
             self.logger.error(f"Workflow failed: {self.workflow_name} - {type(e).__name__}: {e}")
             raise
+        self._persist_state(state)
         self.logger.info(f"Workflow completed: {self.workflow_name}")
         self.logger.debug(f"Final state: {state}")
         return state
@@ -119,6 +128,19 @@ class Runner:
             The workflow handler callable.
         """
         return self.app.get_handler(self.workflow_name)
+
+    def _persist_state(self, state: State) -> None:
+        """Persist the current state to a JSON file.
+
+        Writes the state dictionary to the state file path established during
+        Runner initialization. The state is written as formatted JSON for
+        readability.
+
+        Args:
+            state: The state dictionary to persist.
+        """
+        with open(self._state_path, "w") as f:
+            json.dump(state, f, indent=2)
 
     def report_progress(self, message: str) -> None:
         """Report progress through the channel.
