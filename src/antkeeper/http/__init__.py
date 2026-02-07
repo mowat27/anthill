@@ -17,6 +17,7 @@ def run_workflow_background(runner: Runner) -> None:
 
     Args:
         runner: The Runner instance to execute.
+
     """
     try:
         runner.run()

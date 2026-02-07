@@ -16,8 +16,11 @@ class WorkflowFailedError(Exception):
     should terminate execution. It is caught by channels to handle workflow
     failures appropriately (e.g., CLI exits with status 1, API logs error).
 
-    Attributes:
+    Args:
         message: The error message describing the failure.
+
+    Attributes:
+        args: Tuple containing the error message.
     """
 
 

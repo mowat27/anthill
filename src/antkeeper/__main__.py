@@ -1,4 +1,8 @@
-"""Enable execution via python -m antkeeper."""
+"""Entry point module for executing Antkeeper as a Python module.
+
+This module enables running Antkeeper via `python -m antkeeper`, which
+delegates to the CLI main function.
+"""
 
 from antkeeper.cli import main
 

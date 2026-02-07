@@ -16,7 +16,9 @@ class WebhookRequest(BaseModel):
     Attributes:
         workflow_name: Name of the registered workflow handler to invoke.
         initial_state: Optional initial state dictionary to pass to the workflow.
+
     """
+
     workflow_name: str
     initial_state: dict[str, Any] = {}
 
@@ -26,7 +28,9 @@ class WebhookResponse(BaseModel):
 
     Attributes:
         run_id: Unique identifier for the initiated workflow run.
+
     """
+
     run_id: str
 
 
@@ -46,6 +50,7 @@ async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTa
 
     Raises:
         HTTPException: 404 error if the specified workflow name is not registered.
+
     """
     try:
         antkeeper_app.get_handler(request.workflow_name)

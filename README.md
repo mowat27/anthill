@@ -2,10 +2,41 @@
 
 A lightweight Python workflow engine. Define handlers (workflow steps) via a decorator-based `App`, wire them to a `Channel` (I/O boundary), and execute through a `Runner`. Designed for composable, testable pipelines.
 
+## Installation
+
+### From PyPI
+
+```bash
+# Core package (python-dotenv only)
+pip install antkeeper
+
+# With server support (FastAPI + uvicorn)
+pip install antkeeper[server]
+
+# With Slack integration (httpx)
+pip install antkeeper[slack]
+
+# All extras
+pip install antkeeper[all]
+```
+
+### From Source
+
+```bash
+# Clone the repository
+git clone https://github.com/mowat27/antkeeper.git
+cd antkeeper
+
+# Install with uv
+uv sync  # Development dependencies
+uv pip install .  # Core only
+uv pip install ".[all]"  # All extras
+```
+
 ## Requirements
 
 - Python >= 3.12
-- [uv](https://docs.astral.sh/uv/) package manager
+- [uv](https://docs.astral.sh/uv/) package manager (for development)
 
 ## Quickstart
 
@@ -293,6 +324,7 @@ The **CLI** (`src/antkeeper/cli.py`) is the entry point. It loads user-defined h
 ### Framework Documentation
 
 For detailed framework development documentation, see `app_docs/`:
+- `app_docs/releasing.md` - Packaging, dependency management, PyPI release process
 - `app_docs/testing_policy.md` - Testing approach, fixture management, patterns
 - `app_docs/instrumentation.md` - Logging, state persistence, error handling
 - `app_docs/http_server.md` - HTTP server architecture and endpoint design

@@ -64,7 +64,7 @@ This makes all endpoints visible at the top level of `server.py`, matching the s
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANTKEEPER_HANDLERS_FILE` | `handlers.py` | Path to the Python file containing the Antkeeper `app` object. Read at import time by `create_app()`. When using the CLI `server` subcommand, the `--agents-file` flag writes to this env var before uvicorn starts. |
+| `ANTKEEPER_HANDLERS_FILE` | `handlers.py` | Path to the Python file containing the Antkeeper `app` object. Read at import time by `create_app()`. When using the CLI `server` subcommand, the `--agents-file` flag sets this env var before uvicorn starts. Previously named `ANTKEEPER_AGENTS_FILE` (renamed in v0.1.0). |
 
 ## POST /webhook
 

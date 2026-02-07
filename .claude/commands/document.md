@@ -36,6 +36,7 @@ FOCUS: Git commit(s), files, directories, experts etc. Default to whole system.
   - changes that were made after the main build (ie gaps in our specs)
   - anything else that indicated a gap in the spec or surrounding documentation
 * Use the information to update the following files
+  * **app_decs/releasing.md** - documents how we packaging and releasing
   * **app_decs/testing_policy.md** - documents how we do testing - e.g. test approach, fixture management etc - NOT the specifics of the test cases we run (those can be taken from the code)
   * **app_decs/instrumentation.md** - documents how we report progress at runtime. This includes logging and state persistance.
   * **app_decs/http_server.md** - documents the http server - endpoints, configuration, design etc at an abstract level but do not overlap with the slack docs below
