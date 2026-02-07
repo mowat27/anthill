@@ -132,8 +132,7 @@ If `ARGUMENTS` contain "BREAKING CHANGE" or similar ("BREAKING_CHANGE", "breakin
 <lightweight-process>
   1. Read all `Relevant Files`
   2. Design the solution and tests
-  3. Ask the `design-expert` skill to validate your design.  Incorporate changes.  Repeat until there are no more issues
-  4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `patch-{SLUG}.md`
+  3. Populate the `Spec Format` template and write it to `specs/` with filename: `{FEATURE_TYPE}-{SLUG}.md`.
 </lightweight-process>
 
 ## Spec Format
@@ -190,13 +189,16 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 * `app_docs/README.md` - provides an index into the application documentation files.  You MUST read this and use the resources provided to ensure you are building to existing standards
 * `README.md` - contains developer documentation and how to use the framework.  Use this as additional context.
 
+The design expert skill will answer questions about how the system is designed.  Use it proactively as needed.
+
 ## Report
 
 Provide:
 
-* **IMPORTANT**: Location of plan file
+* **IMPORTANT**: Location of spec file
 * Overview of design
 * Observations from agents and decisions made
 * Trade offs and assumptions made
 
+IMPORTANT: Always write the spec document.  Never stop and ask for clarification or permission.
 
