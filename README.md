@@ -13,7 +13,7 @@ A lightweight Python workflow engine. Define handlers (workflow steps) via a dec
 # Install dependencies
 uv sync
 
-# Run a workflow
+# Run a workflow via CLI
 anthill run --agents-file handlers.py --initial-state result=5 plus_1
 
 # Run an LLM workflow with prompt and model
@@ -21,6 +21,9 @@ anthill run --prompt "describe this project" --model sonnet specify
 
 # Run with prompt from file (mutually exclusive with --prompt)
 anthill run --prompt-file prompts/describe.md --model sonnet specify
+
+# Start an API server to trigger workflows via HTTP
+anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 
 # Use just recipes for common workflows
 just sdlc "Add authentication" opus           # Standard SDLC workflow
@@ -32,11 +35,12 @@ just sdlc_iso "Add dark mode" opus           # Isolated SDLC in git worktree
 ```
 src/anthill/
 ├── core/               # Framework kernel
-│   ├── domain.py       # State type alias, Channel protocol
+│   ├── domain.py       # State type alias, Channel protocol, WorkflowFailedError
 │   ├── app.py          # App handler registry, run_workflow helper
 │   └── runner.py       # Runner execution engine
 ├── channels/
-│   └── cli.py          # CLI channel adapter (stdout/stderr reporting)
+│   ├── cli.py          # CLI channel adapter (stdout/stderr reporting)
+│   └── api.py          # API channel adapter (server logging)
 ├── git/                # Git worktree integration
 │   └── worktrees.py    # Worktree class, git_worktree context manager
 ├── helpers/
@@ -45,7 +49,8 @@ src/anthill/
 │   ├── __init__.py     # Agent protocol
 │   ├── errors.py       # AgentExecutionError
 │   └── claude_code.py  # ClaudeCodeAgent (subprocess-based)
-└── cli.py              # Argparse-based CLI entry point
+├── cli.py              # Argparse-based CLI entry point
+└── server.py           # FastAPI webhook server
 ```
 
 ### Key Concepts
@@ -62,6 +67,7 @@ src/anthill/
 
 ### Data Flow
 
+**CLI Execution:**
 1. CLI parses args and loads an agents file (Python module exporting `app`)
 2. Builds a `CliChannel(workflow_name, initial_state)`
 3. `Runner(app, channel).run()` merges initial state with `{run_id, workflow_name}`
@@ -69,6 +75,15 @@ src/anthill/
 5. Composite handlers use `run_workflow` to chain sub-steps
 6. For LLM workflows: handler creates an `Agent`, calls `agent.prompt()`, and spreads the response into state
 7. Result state is printed to stdout
+8. If handler calls `runner.fail()`, CLI catches `WorkflowFailedError`, prints to stderr, exits 1
+
+**API Execution:**
+1. POST `/webhook` with `{"workflow_name": "my_wf", "initial_state": {...}}`
+2. Server validates workflow exists, creates `ApiChannel(workflow_name, initial_state)`
+3. Returns `{"run_id": "abc123"}` immediately
+4. Workflow runs in background task
+5. Progress/errors appear in server logs (stdout/stderr)
+6. If handler calls `runner.fail()`, server catches `WorkflowFailedError`, logs error, continues serving
 
 ### Writing Handlers
 
@@ -140,14 +155,28 @@ Log format: `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] anthill.run.{run_id} - message`
 
 Logs do not appear in stdout/stderr (propagation disabled).
 
-### CLI Options
+### CLI Commands
 
-The `anthill run` command accepts:
+**anthill run** - Execute a workflow via CLI:
 - `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)
 - `--prompt <text>` - Prompt string to inject into initial state as `state["prompt"]`
 - `--prompt-file <path>` - Read prompt from file (mutually exclusive with `--prompt`)
 - `--model <name>` - Model name to inject as `state["model"]` (e.g., `opus`, `sonnet`)
 - `--initial-state key=value` - Set additional state keys (repeatable)
+
+**anthill server** - Start FastAPI webhook server:
+- `--host <host>` - Bind address (default: `127.0.0.1`)
+- `--port <port>` - Port number (default: `8000`)
+- `--reload` - Enable auto-reload on code changes
+- `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)
+
+**API Usage:**
+```bash
+curl -X POST http://localhost:8000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"workflow_name": "my_workflow", "initial_state": {"key": "value"}}'
+# Returns: {"run_id": "abc123"}
+```
 
 The justfile provides convenient recipes:
 - `just sdlc "prompt" opus` - Run standard SDLC workflow, auto-detects if prompt is a file path
@@ -182,7 +211,7 @@ Start with the **core layer** (`src/anthill/core/`):
 - `app.py` has the `App` registry and `run_workflow` composition helper
 - `runner.py` ties `App` + `Channel` together and drives execution
 
-The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` is the only implementation; add new channels here for other I/O patterns (API, message queue, etc.).
+The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` writes to stdout/stderr for terminal usage. `ApiChannel` writes to stdout/stderr for server logs. Add new channels here for other I/O patterns (message queue, database, etc.).
 
 The **llm layer** (`src/anthill/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
 

@@ -9,6 +9,10 @@ These types form the foundation for handler signatures and runner operations.
 from typing import Any, Protocol
 
 
+class WorkflowFailedError(Exception):
+    """Raised by Runner.fail() to signal a workflow failure."""
+
+
 type State = dict[str, Any]
 """State represents workflow data as a dictionary of key-value pairs.
 

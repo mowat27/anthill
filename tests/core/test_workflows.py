@@ -7,10 +7,11 @@ error handling, and handler resolution.
 import pytest
 
 from anthill.core.app import run_workflow
-from anthill.core.domain import State
+from anthill.core.domain import State, WorkflowFailedError
 
 
 class TestWorkflows:
+    """Test suite for workflow execution and handler composition."""
     def test_single_handler(self, app, runner_factory):
         """Test execution of a workflow with a single handler."""
 
@@ -47,7 +48,7 @@ class TestWorkflows:
         assert source.progress_messages == ["adding 1", "doubling"]
 
     def test_failure(self, app, runner_factory):
-        """Test that workflow failure is propagated correctly via SystemExit."""
+        """Test that workflow failure is propagated correctly via WorkflowFailedError."""
 
         @app.handler
         def blow_up(runner, _state: State):
@@ -55,7 +56,7 @@ class TestWorkflows:
             runner.fail("Workflow failed")
 
         runner, source = runner_factory(app, "blow_up", {"result": 1})
-        with pytest.raises(SystemExit):
+        with pytest.raises(WorkflowFailedError):
             runner.run()
         assert source.error_messages == ["something broke"]
 
