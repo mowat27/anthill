@@ -73,6 +73,7 @@ Tests mirror source layout:
 tests/
 ├── core/              # Tests for src/anthill/core/
 ├── channels/          # Tests for src/anthill/channels/
+├── helpers/           # Tests for src/anthill/helpers/
 ├── llm/               # Tests for src/anthill/llm/
 └── test_cli.py        # Tests for src/anthill/cli.py
 ```
