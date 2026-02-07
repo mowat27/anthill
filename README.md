@@ -102,17 +102,13 @@ just ty      # Type-check
 just test    # Tests
 ```
 
-### Running Tests
+### Testing
 
 ```bash
 uv run -m pytest tests/ -v
 ```
 
-Tests follow these rules:
-- **Test the framework, not the app.** Import from `anthill.core.*`.
-- **Each test owns its setup.** No shared global state.
-- **Replace I/O at the boundary.** Swap channels with capturing doubles.
-- **One test per code path.**
+See [app_docs/testing_policy.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/testing_policy.md) for detailed testing guidelines.
 
 ### Navigating the Codebase
 
@@ -127,4 +123,8 @@ The **llm layer** (`src/anthill/llm/`) abstracts LLM interactions behind the `Ag
 
 The **CLI** (`src/anthill/cli.py`) is the entry point. It loads user-defined handlers from a Python file (default: `handlers.py`) and wires everything together.
 
-**Test doubles** live in `tests/conftest.py` — `TestChannel` captures progress/error messages in lists, and `runner_factory` creates test `Runner` instances.
+### Framework Documentation
+
+- [app_docs/testing_policy.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/testing_policy.md) - Testing approach and fixture management
+- [app_docs/instrumentation.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/instrumentation.md) - Progress reporting and error handling patterns
+- [CLAUDE.md](/Users/adrian/code/mowat27/precision-weave/anthill/CLAUDE.md) - Quick reference for AI agents
