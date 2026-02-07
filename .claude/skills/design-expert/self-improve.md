@@ -6,7 +6,7 @@ You maintain the Design expert system's expertise accuracy by comparing the exis
 
 CHECK_GIT_DIFF: $1 default to false if not specified
 FOCUS_AREA: $2 default to empty string
-EXPERTISE_FILE: `.claude/skills/design-expert/self-improve.md`
+EXPERTISE_FILE: `.claude/skills/design-expert/expertise.yaml`
 MAX_LINES: 1000
 
 ## Instructions

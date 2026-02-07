@@ -1,12 +1,16 @@
 """Application framework for registering and managing workflow handlers.
 
-This module provides the App class which serves as the central registry for
-workflow handlers and the run_workflow function for executing handler chains.
+This module provides:
+- App: Central registry for workflow handlers with decorator-based registration
+- run_workflow: Helper function for executing sequential handler chains
+
+The App class is the main entry point for defining workflows. Use the @app.handler
+decorator to register workflow functions, then pass the app to a Runner for execution.
 """
 from __future__ import annotations
 
 import functools
-from typing import Callable, NoReturn, TYPE_CHECKING
+from typing import Any, Callable, NoReturn, TYPE_CHECKING
 
 from anthill.core.domain import State
 
@@ -21,9 +25,21 @@ class App:
     """Central registry for workflow handlers.
 
     The App class manages handler registration and retrieval, allowing workflows
-    to be defined as decorated functions and later executed by runners.
+    to be defined as decorated functions and later executed by runners. Each app
+    instance maintains its own handler registry and log directory configuration.
+
+    Typical usage:
+        app = App(log_dir="logs/")
+
+        @app.handler
+        def my_workflow(runner: Runner, state: State) -> State:
+            return {**state, "result": "done"}
+
+    Attributes:
+        handlers: Dictionary mapping handler names to their functions.
+        log_dir: Directory path where Runner instances will write log files.
     """
-    def __init__(self, log_dir: str = "agents/logs/"):
+    def __init__(self, log_dir: str = "agents/logs/") -> None:
         """Initialize a new App instance with an empty handler registry.
 
         Args:
@@ -32,8 +48,11 @@ class App:
         self.handlers = {}
         self.log_dir = log_dir
 
-    def handler(self, fn):
+    def handler(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         """Register a function as a workflow handler.
+
+        This decorator registers a workflow handler function and wraps it for execution.
+        The handler's name becomes its registry key for lookup by runners.
 
         Args:
             fn: A callable that accepts a Runner and State and returns a State
@@ -46,7 +65,8 @@ class App:
         def wrapper(runner: Runner, state: State) -> State | NoReturn:
             return fn(runner, state)
 
-        self.handlers[fn.__name__] = fn
+        name: str = fn.__name__  # type: ignore[attr-defined]
+        self.handlers[name] = fn
         return wrapper
 
     def get_handler(self, name: str) -> Callable[[Runner, State], State | NoReturn]:
@@ -67,8 +87,11 @@ class App:
             raise ValueError(f"Unknown handler: {name}")
 
 
-def run_workflow(runner: Runner, state: State, steps: list[Callable]):
+def run_workflow(runner: Runner, state: State, steps: list[Callable[[Runner, State], State]]) -> State:
     """Execute a sequence of workflow steps with state threading.
+
+    Each step receives the runner and current state, processes it, and returns
+    an updated state that is passed to the next step. All steps are logged.
 
     Args:
         runner: The Runner instance executing the workflow.

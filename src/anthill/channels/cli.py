@@ -1,6 +1,8 @@
 """CLI channel implementation for Anthill workflows.
 
-Provides progress reporting and error handling for command-line environments.
+This module provides the CliChannel class, which implements the Channel
+protocol for command-line interface environments. It handles progress
+reporting to stdout and error reporting to stderr.
 """
 import logging
 import sys
@@ -14,16 +16,23 @@ logger = logging.getLogger("anthill.channels.cli")
 class CliChannel:
     """Channel adapter for command-line interface workflows.
 
-    Handles progress reporting and error messaging through stdout/stderr
-    for workflows executed in CLI environments.
+    Implements the Channel protocol for CLI environments. Progress messages
+    are written to stdout with flush=True for immediate display. Error messages
+    are written to stderr.
+
+    Attributes:
+        type: Always "cli" to identify this channel type.
+        workflow_name: The name of the workflow being executed.
+        initial_state: The initial state dictionary for the workflow.
     """
 
     def __init__(self, workflow_name: str, initial_state: dict[str, str] | None = None) -> None:
         """Initialize CLI channel with workflow configuration.
 
         Args:
-            workflow_name: Name of the workflow for display purposes.
+            workflow_name: Name of the workflow for display purposes and logging.
             initial_state: Optional dictionary of initial state key-value pairs.
+                          Defaults to an empty dict if not provided.
         """
         self.type = "cli"
         self.workflow_name = workflow_name

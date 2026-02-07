@@ -66,11 +66,12 @@ from anthill.core.app import App, run_workflow
 from anthill.core.runner import Runner
 from anthill.core.domain import State
 
-app = App()
+app = App()  # or App(log_dir="my/logs/") for custom log location
 
 @app.handler
 def my_step(runner: Runner, state: State) -> State:
     runner.report_progress("doing work")
+    runner.logger.info("Custom log entry")  # per-run log file
     return {**state, "result": "done"}
 ```
 
@@ -87,6 +88,24 @@ def ask_llm(runner: Runner, state: State) -> State:
     response = agent.prompt(state["prompt"])
     return {**state, "result": response}
 ```
+
+### Logging
+
+The framework creates a log file for each workflow run at `{log_dir}/{timestamp}-{run_id}.log` (default: `agents/logs/`). Configure via `App(log_dir="path/")`.
+
+Logs capture framework lifecycle events (runner init, workflow start/complete), handler execution (step names, state keys at DEBUG level), and errors. Access the logger in handlers via `runner.logger`:
+
+```python
+@app.handler
+def my_step(runner: Runner, state: State) -> State:
+    runner.logger.info("Starting work")
+    runner.logger.debug(f"State: {state}")
+    return {**state, "done": True}
+```
+
+Log format: `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] anthill.run.{run_id} - message`
+
+Logs do not appear in stdout/stderr (propagation disabled).
 
 ## Development
 
@@ -108,7 +127,7 @@ just test    # Tests
 uv run -m pytest tests/ -v
 ```
 
-See [app_docs/testing_policy.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/testing_policy.md) for detailed testing guidelines.
+Tests are organized to mirror the source layout (`tests/core/`, `tests/channels/`, `tests/llm/`). Each test owns its setup using shared fixtures from `tests/conftest.py`. The `app` fixture provides log isolation via temp directories.
 
 ### Navigating the Codebase
 
@@ -125,6 +144,4 @@ The **CLI** (`src/anthill/cli.py`) is the entry point. It loads user-defined han
 
 ### Framework Documentation
 
-- [app_docs/testing_policy.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/testing_policy.md) - Testing approach and fixture management
-- [app_docs/instrumentation.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/instrumentation.md) - Progress reporting and error handling patterns
-- [CLAUDE.md](/Users/adrian/code/mowat27/precision-weave/anthill/CLAUDE.md) - Quick reference for AI agents
+For framework development policies (testing strategy, instrumentation patterns), see `app_docs/`. For a concise reference card, see `CLAUDE.md`.

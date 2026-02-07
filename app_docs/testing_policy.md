@@ -66,10 +66,32 @@ Run via justfile:
 just test
 ```
 
+## Test Organization
+
+Tests mirror source layout:
+```
+tests/
+├── core/              # Tests for src/anthill/core/
+├── channels/          # Tests for src/anthill/channels/
+├── llm/               # Tests for src/anthill/llm/
+└── test_cli.py        # Tests for src/anthill/cli.py
+```
+
 ## Fixture Management
 
 All shared fixtures live in `tests/conftest.py`:
-- `runner_factory` - Creates Runner + TestChannel pairs
+- `app` - Returns `App(log_dir=tempfile.mkdtemp())` per test for log isolation
+- `runner_factory` - Creates Runner + TestChannel pairs, accepts optional `app` parameter
 - `TestChannel` - In-memory channel double for capturing I/O
 
 Keep fixture scope minimal. Prefer function-scoped fixtures to session-scoped unless there's a compelling performance reason.
+
+### Log Isolation in Tests
+
+The `app` fixture directs logs to a temp directory per test, preventing log files from accumulating in the working directory. Tests that create Runners should use the `app` fixture:
+
+```python
+def test_something(app, runner_factory):
+    runner, source = runner_factory(app, "workflow", {})
+    # Log files go to app.log_dir (temp directory)
+```

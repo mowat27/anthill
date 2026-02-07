@@ -1,13 +1,20 @@
 """LLM agent abstractions for Anthill workflows.
 
-Defines the Agent protocol for LLM interactions.
+This module defines the Agent protocol that all LLM implementations must follow.
+Agents provide a uniform interface for executing prompts regardless of the
+underlying LLM provider (Claude Code CLI, OpenAI, etc.).
 """
 
 from typing import Protocol
 
 
 class Agent(Protocol):
-    """Protocol for LLM agents that execute prompts."""
+    """Protocol for LLM agents that execute prompts.
+
+    Implementations must provide a prompt() method that accepts a string
+    and returns the LLM's response. The protocol allows for dependency
+    injection and easy testing via mock agents.
+    """
 
     def prompt(self, prompt: str) -> str:
         """Execute a prompt and return the response.
@@ -17,5 +24,8 @@ class Agent(Protocol):
 
         Returns:
             The LLM's response as a string.
+
+        Raises:
+            AgentExecutionError: If the agent fails to execute the prompt.
         """
         ...
