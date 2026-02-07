@@ -70,12 +70,12 @@ class TestArgParsing:
         assert args.agents_file == "custom.py"
 
     def test_parse_run_with_prompt_file_flag(self):
-        """Test that --prompt-file flag is parsed."""
+        """Test that --prompt-file flag is parsed and file path is stored."""
         args = self._build_parser().parse_args(["run", "--prompt-file", "foo.txt", "my_handler"])
         assert args.prompt_file == "foo.txt"
 
     def test_prompt_and_prompt_file_mutually_exclusive(self):
-        """Test that providing both --prompt and --prompt-file causes parser to exit."""
+        """Test that --prompt and --prompt-file are mutually exclusive arguments."""
         with pytest.raises(SystemExit):
             self._build_parser().parse_args(["run", "--prompt", "x", "--prompt-file", "y", "my_handler"])
 

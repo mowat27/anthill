@@ -15,6 +15,7 @@ from anthill.core.domain import State
 
 
 class TestAppConfiguration:
+    """Test suite for App initialization and configuration parameters."""
     def test_app_log_dir_defaults_to_agents_logs(self):
         """Test that App().log_dir defaults to 'agents/logs/'."""
         assert App().log_dir == "agents/logs/"
@@ -22,6 +23,14 @@ class TestAppConfiguration:
     def test_app_log_dir_accepts_custom_value(self):
         """Test that App(log_dir=...) stores the custom value."""
         assert App(log_dir="/tmp/custom").log_dir == "/tmp/custom"
+
+    def test_app_worktree_dir_defaults_to_trees(self):
+        """Test that App().worktree_dir defaults to 'trees/'."""
+        assert App().worktree_dir == "trees/"
+
+    def test_app_worktree_dir_accepts_custom_value(self):
+        """Test that App(worktree_dir=...) stores the custom value."""
+        assert App(worktree_dir="/tmp/wt").worktree_dir == "/tmp/wt"
 
 
 class TestRunnerLogFileCreation:
