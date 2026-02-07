@@ -12,4 +12,17 @@ test:
   uv run pytest
 
 sdlc prompt model="opus":
-  uv run anthill run sdlc --model {{model}} --prompt "{{prompt}}"
+  #!/usr/bin/env bash
+  if [ -f "{{prompt}}" ]; then
+    uv run anthill run sdlc --model {{model}} --prompt-file "{{prompt}}"
+  else
+    uv run anthill run sdlc --model {{model}} --prompt "{{prompt}}"
+  fi
+
+sdlc_iso prompt model="opus":
+  #!/usr/bin/env bash
+  if [ -f "{{prompt}}" ]; then
+    uv run anthill run sdlc_iso --model {{model}} --prompt-file "{{prompt}}"
+  else
+    uv run anthill run sdlc_iso --model {{model}} --prompt "{{prompt}}"
+  fi
