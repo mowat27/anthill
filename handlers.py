@@ -4,13 +4,19 @@ Each handler runs a slash command via ClaudeCodeAgent, extracts structured
 data from the response, and threads it through state for downstream steps.
 """
 
+from datetime import datetime
+
 from anthill.core.runner import Runner
 from anthill.core.domain import State
 from anthill.core.app import App, run_workflow
+from anthill.git.worktrees import Worktree, git_worktree
 from anthill.helpers.json import extract_json
 from anthill.llm.claude_code import ClaudeCodeAgent
 
 app = App()
+
+
+# --- Steps ---
 
 
 @app.handler
@@ -75,7 +81,31 @@ def document(runner: Runner, state: State) -> State:
     return {**state, "document_status": "complete"}
 
 
+@app.handler
+def derive_feature(runner: Runner, state: State) -> State:
+    """Derive feature type and slug from a prompt via LLM."""
+    runner.report_progress("Deriving feature metadata")
+    agent = ClaudeCodeAgent(model=state.get("model"))
+    prompt = (
+        f'/derive_feature {state["prompt"]}\n\n'
+        "After running the command, return ONLY a JSON object: "
+        '{"feature_type": "<type>", "slug": "<slug>"}'
+    )
+    runner.logger.info(f"derive_feature prompt: {prompt}")
+    response = agent.prompt(prompt)
+    runner.logger.info(f"derive_feature response: {response}")
+    parsed = extract_json(response)
+    runner.report_progress("Feature metadata derived")
+    return {**state, "feature_type": parsed["feature_type"], "slug": parsed["slug"]}
+
+
+# --- Shared workflow constants ---
+
+
 SDLC_STEPS = [specify, branch, implement, document]
+
+
+# --- Workflows ---
 
 
 @app.handler
@@ -86,5 +116,17 @@ def sdlc(runner: Runner, state: State) -> State:
 
 @app.handler
 def specify_and_branch(runner: Runner, state: State) -> State:
-    """Run the full SDLC workflow: specify -> branch -> implement -> document."""
+    """Run partial SDLC workflow: specify -> branch."""
     return run_workflow(runner, state, SDLC_STEPS[0:2])
+
+
+@app.handler
+def sdlc_iso(runner: Runner, state: State) -> State:
+    """Run SDLC workflow inside an isolated git worktree."""
+    state = derive_feature(runner, state)
+    worktree_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{runner.id}"
+    branch_name = f"{state['feature_type']}/{state['slug']}"
+    wt = Worktree(base_dir=runner.app.worktree_dir, name=worktree_name)
+    with git_worktree(wt, create=True, branch=branch_name, remove=False):
+        state = run_workflow(runner, state, [specify, implement, document])
+    return {**state, "worktree_path": wt.path, "branch_name": branch_name}
