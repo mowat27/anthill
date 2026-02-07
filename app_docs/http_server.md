@@ -29,7 +29,7 @@ Each endpoint module in `http/` exports plain functions or classes that handle t
 
 ```python
 def create_app(
-    agents_file: str = os.environ.get("ANTKEEPER_AGENTS_FILE", "handlers.py"),
+    agents_file: str = os.environ.get("ANTKEEPER_HANDLERS_FILE", "handlers.py"),
 ) -> FastAPI:
 ```
 
@@ -64,7 +64,7 @@ This makes all endpoints visible at the top level of `server.py`, matching the s
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANTKEEPER_AGENTS_FILE` | `handlers.py` | Path to the Python file containing the Antkeeper `app` object. Read at import time by `create_app()`. When using the CLI `server` subcommand, the `--agents-file` flag writes to this env var before uvicorn starts. |
+| `ANTKEEPER_HANDLERS_FILE` | `handlers.py` | Path to the Python file containing the Antkeeper `app` object. Read at import time by `create_app()`. When using the CLI `server` subcommand, the `--agents-file` flag writes to this env var before uvicorn starts. |
 
 ## POST /webhook
 
@@ -205,14 +205,14 @@ antkeeper server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 | `--host` | `127.0.0.1` | Host address to bind. |
 | `--port` | `8000` | Port number to bind. |
 | `--reload` | off | Enable uvicorn auto-reload on code changes. |
-| `--agents-file` | `handlers.py` | Path to the Python file containing the Antkeeper app. Sets `ANTKEEPER_AGENTS_FILE` before starting uvicorn. |
+| `--agents-file` | `handlers.py` | Path to the Python file containing the Antkeeper app. Sets `ANTKEEPER_HANDLERS_FILE` before starting uvicorn. |
 
-The CLI `server` subcommand sets the `ANTKEEPER_AGENTS_FILE` environment variable and then calls `uvicorn.run("antkeeper.server:app", ...)`.
+The CLI `server` subcommand sets the `ANTKEEPER_HANDLERS_FILE` environment variable and then calls `uvicorn.run("antkeeper.server:app", ...)`.
 
 ### Via uvicorn directly
 
 ```bash
-ANTKEEPER_AGENTS_FILE=handlers.py uvicorn antkeeper.server:app --host 0.0.0.0 --port 8000
+ANTKEEPER_HANDLERS_FILE=handlers.py uvicorn antkeeper.server:app --host 0.0.0.0 --port 8000
 ```
 
-Set `ANTKEEPER_AGENTS_FILE` in the environment (or in a `.env` file) before running.
+Set `ANTKEEPER_HANDLERS_FILE` in the environment (or in a `.env` file) before running.

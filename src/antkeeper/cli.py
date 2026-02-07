@@ -171,7 +171,7 @@ def main() -> None:
     elif args.command == "server":
         import uvicorn
 
-        os.environ["ANTKEEPER_AGENTS_FILE"] = args.agents_file
+        os.environ["ANTKEEPER_HANDLERS_FILE"] = args.agents_file
         uvicorn.run("antkeeper.server:app", host=args.host, port=args.port, reload=args.reload)
 
 

@@ -29,7 +29,7 @@ antkeeper server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 #   SLACK_BOT_TOKEN=xoxb-...
 #   SLACK_BOT_USER_ID=U...
 #   SLACK_COOLDOWN_SECONDS=5  (optional, default 5)
-#   ANTKEEPER_AGENTS_FILE=handlers.py  (optional)
+#   ANTKEEPER_HANDLERS_FILE=handlers.py  (optional)
 
 # Use just recipes for common workflows
 just sdlc "Add authentication" opus           # Standard SDLC workflow

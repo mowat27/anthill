@@ -12,7 +12,7 @@ from antkeeper.http.webhook import WebhookRequest, WebhookResponse, handle_webho
 from antkeeper.http.slack_events import SlackEventProcessor
 
 
-def create_app(agents_file: str = os.environ.get("ANTKEEPER_AGENTS_FILE", "handlers.py")) -> FastAPI:
+def create_app(agents_file: str = os.environ.get("ANTKEEPER_HANDLERS_FILE", "handlers.py")) -> FastAPI:
     """Create and configure a FastAPI application for Antkeeper workflows.
 
     Loads an Antkeeper app from the specified Python file and creates a FastAPI
@@ -20,7 +20,7 @@ def create_app(agents_file: str = os.environ.get("ANTKEEPER_AGENTS_FILE", "handl
 
     Args:
         agents_file: Path to Python file containing the Antkeeper app.
-            Defaults to ANTKEEPER_AGENTS_FILE env var or "handlers.py".
+            Defaults to ANTKEEPER_HANDLERS_FILE env var or "handlers.py".
 
     Returns:
         Configured FastAPI application instance.
@@ -77,7 +77,7 @@ app = create_app()
 
 This is the ASGI application instance that should be passed to uvicorn or
 other ASGI servers. It is created by calling create_app() with default
-parameters (reading from ANTKEEPER_AGENTS_FILE environment variable or
+parameters (reading from ANTKEEPER_HANDLERS_FILE environment variable or
 using "handlers.py" as the default agents file).
 
 Example:
