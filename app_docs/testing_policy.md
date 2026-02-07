@@ -75,6 +75,10 @@ tests/
 ├── channels/          # Tests for src/anthill/channels/
 ├── helpers/           # Tests for src/anthill/helpers/
 ├── llm/               # Tests for src/anthill/llm/
+├── git/               # Tests for src/anthill/git/
+│   ├── conftest.py    # git_repo fixture
+│   ├── test_worktree.py      # Worktree class tests
+│   └── test_context.py       # git_worktree context manager tests
 └── test_cli.py        # Tests for src/anthill/cli.py
 ```
 
@@ -98,18 +102,45 @@ For file-based inputs (e.g., `--prompt-file`), integration tests should write kn
 ## Fixture Management
 
 All shared fixtures live in `tests/conftest.py`:
-- `app` - Returns `App(log_dir=tempfile.mkdtemp())` per test for log isolation
+- `app` - Returns `App(log_dir=tempfile.mkdtemp(), worktree_dir=tempfile.mkdtemp())` per test for log and worktree isolation
 - `runner_factory` - Creates Runner + TestChannel pairs, accepts optional `app` parameter
 - `TestChannel` - In-memory channel double for capturing I/O
 
+Git-specific fixtures live in `tests/git/conftest.py`:
+- `git_repo` - Creates a temp git repository with an initial commit, sets up git config (user.name, user.email), changes cwd into the repo, and restores original cwd on teardown. Use this for tests that exercise git worktree operations.
+
 Keep fixture scope minimal. Prefer function-scoped fixtures to session-scoped unless there's a compelling performance reason.
 
-### Log Isolation in Tests
+### Log and Worktree Isolation in Tests
 
-The `app` fixture directs logs to a temp directory per test, preventing log files from accumulating in the working directory. Tests that create Runners should use the `app` fixture:
+The `app` fixture directs logs and worktrees to temp directories per test, preventing files from accumulating in the working directory. Tests that create Runners or use worktrees should use the `app` fixture:
 
 ```python
 def test_something(app, runner_factory):
     runner, source = runner_factory(app, "workflow", {})
     # Log files go to app.log_dir (temp directory)
+    # Worktrees go to app.worktree_dir (temp directory)
 ```
+
+### Git Worktree Testing Patterns
+
+Tests for git worktree functionality should use the `git_repo` fixture from `tests/git/conftest.py`. This fixture:
+- Creates a temp directory with a fully initialized git repository
+- Adds an initial commit (required for worktree operations)
+- Configures local git identity (user.name, user.email) for CI compatibility
+- Changes cwd into the repository for the test duration
+- Restores the original cwd on teardown
+
+Example:
+```python
+def test_worktree_create(git_repo):
+    wt = Worktree(base_dir="trees", name="feature")
+    wt.create(branch="feat/new")
+    assert wt.exists
+```
+
+Tests for the `git_worktree` context manager should verify:
+- Worktree creation (with and without branch)
+- Cwd switching and restoration
+- Error handling for missing worktrees
+- Cleanup behavior (remove=True/False)
