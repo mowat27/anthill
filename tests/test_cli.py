@@ -78,15 +78,16 @@ class TestCliIntegration:
 
     def test_cli_loads_agents_file_and_runs(self, monkeypatch, capsys):
         """Test end-to-end CLI execution with dynamic handler loading from file."""
-        agents_code = textwrap.dedent("""\
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
             from anthill.core.app import App
             from anthill.core.domain import State
 
-            app = App()
+            app = App(log_dir="{log_dir}")
 
             @app.handler
             def add_1(runner, state: State) -> State:
-                return {**state, "result": int(state["result"]) + 1}
+                return {{**state, "result": int(state["result"]) + 1}}
         """)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(agents_code)
@@ -108,15 +109,16 @@ class TestCliIntegration:
 
     def test_prompt_and_model_merged_into_state(self, monkeypatch, capsys):
         """Test that --prompt and --model flags are merged into handler state."""
-        agents_code = textwrap.dedent("""\
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
             from anthill.core.app import App
             from anthill.core.domain import State
 
-            app = App()
+            app = App(log_dir="{log_dir}")
 
             @app.handler
             def echo(runner, state: State) -> State:
-                return {**state, "result": f"prompt={state['prompt']},model={state['model']}"}
+                return {{**state, "result": f"prompt={{state['prompt']}},model={{state['model']}}"}}
         """)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(agents_code)

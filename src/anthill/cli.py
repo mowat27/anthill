@@ -1,17 +1,29 @@
 """Command-line interface for Anthill workflow framework.
 
-Provides the main entry point for running Anthill workflows from the command line.
+This module provides the CLI entry point for executing Anthill workflows.
+It handles argument parsing, app loading from Python files, initial state
+configuration, and runner setup.
+
+The CLI supports a 'run' command that loads an app from a Python file,
+configures initial state from command-line arguments, and executes the
+requested workflow through a CliChannel.
 """
 import argparse
 import importlib.util
+import logging
 import sys
 
 from anthill.channels.cli import CliChannel
 from anthill.core.runner import Runner
 
+logger = logging.getLogger("anthill.cli")
+
 
 def load_app(path: str):
     """Dynamically load an Anthill app from a Python file.
+
+    Uses importlib to dynamically import a Python module and extract its
+    'app' attribute, which should be an instance of anthill.core.app.App.
 
     Args:
         path: File path to the Python module containing the app.
@@ -20,7 +32,8 @@ def load_app(path: str):
         The app object from the loaded module.
 
     Raises:
-        FileNotFoundError: If the file cannot be found or loaded.
+        FileNotFoundError: If the file cannot be found or the module spec cannot be created.
+        AttributeError: If the loaded module does not have an 'app' attribute.
     """
     spec = importlib.util.spec_from_file_location("agents", path)
     if spec is None or spec.loader is None:
@@ -52,18 +65,27 @@ def parse_state_pairs(pairs: list[str]) -> dict[str, str]:
     return state
 
 
-def main():
+def main() -> None:
     """Main entry point for the Anthill CLI.
 
     Parses command-line arguments and executes the requested workflow.
-    Supports the 'run' command with the following options:
-    - --agents-file: Path to Python file containing the app (default: handlers.py)
-    - --initial-state: Key=value pairs for initial workflow state (repeatable)
-    - --prompt: User prompt to pass to the workflow
-    - --model: Model identifier to use for LLM operations
-    - workflow_name: Name of the workflow to execute
 
-    Exits with status 0 on success, 1 on error.
+    Commands:
+        run: Execute a workflow with the following options:
+            - --agents-file: Path to Python file containing the app (default: handlers.py)
+            - --initial-state: Key=value pairs for initial workflow state (repeatable)
+            - --prompt: User prompt to pass to the workflow
+            - --model: Model identifier to use for LLM operations
+            - workflow_name: Name of the workflow to execute (positional)
+
+    Exit Codes:
+        0: Success
+        1: Error (file not found, invalid arguments, workflow failure)
+
+    Examples:
+        anthill run my_workflow
+        anthill run --agents-file=my_handlers.py --prompt="Hello" my_workflow
+        anthill run --initial-state key1=val1 --initial-state key2=val2 my_workflow
     """
     parser = argparse.ArgumentParser(prog="anthill")
     subparsers = parser.add_subparsers(dest="command")
@@ -81,17 +103,22 @@ def main():
         parser.print_help()
         sys.exit(0)
 
+    logger.debug(f"CLI args parsed: command={args.command}")
+
     if args.command == "run":
         agents_file = args.agents_file
         try:
             app = load_app(agents_file)
         except FileNotFoundError:
+            logger.error(f"Agents file not found: {agents_file}")
             print(f"Error: agents file not found: {agents_file}", file=sys.stderr)
             sys.exit(1)
         except AttributeError:
+            logger.error(f"{agents_file} has no 'app' attribute")
             print(f"Error: {agents_file} has no 'app' attribute", file=sys.stderr)
             sys.exit(1)
 
+        logger.info(f"App loaded from {agents_file}")
         state = parse_state_pairs(args.initial_state)
         if args.prompt is not None:
             state["prompt"] = args.prompt
@@ -99,7 +126,9 @@ def main():
             state["model"] = args.model
         channel = CliChannel(workflow_name=args.workflow_name, initial_state=state)
         runner = Runner(app, channel)
+        logger.info(f"Runner created: run_id={runner.id}")
         result = runner.run()
+        logger.info("Workflow run complete")
         print(result)
 
 

@@ -18,6 +18,18 @@ overview:
   justfile_default: "check -> ruff, ty, test"
 
 architecture:
+  core_pattern: >
+    Reducer pattern. Each workflow step receives (runner, state) and returns
+    a new State dict. run_workflow folds state through a list of steps.
+    State is ephemeral and never shared between workflow runs — this ensures
+    thread safety (one App serves multiple concurrent workflows) and makes
+    reasoning straightforward.
+  layer_rules:
+    - "Outer layers (channels, CLI) depend on inner layers (core). Never the reverse."
+    - "Core must be truly generic — no channel-specific or domain-specific concepts."
+    - "Channels own runtime type/value checks to prevent bad data reaching core."
+    - "Errors generally propagate up to handlers: missing keys, failed connections, naming mistakes."
+    - "Edge validation (e.g. missing CLI params) can be handled and reported only when a stack trace adds no value."
   layers:
     - name: core
       path: src/anthill/core/
@@ -56,6 +68,12 @@ architecture:
         (Python module exporting `app`), builds a CliChannel, and runs
         the workflow via Runner.
 
+  logging: >
+    File-based per-run logging via Python stdlib logging. Runner creates a
+    per-run logger (anthill.run.<id>) writing to <app.log_dir>/<timestamp>-<id>.log.
+    Module-level loggers exist in cli.py, channels/cli.py, and llm/claude_code.py
+    for debug tracing. No console logging by default — all framework logs go to files.
+
 domain_types:
   State:
     file: src/anthill/core/domain.py
@@ -82,37 +100,48 @@ core_objects:
   App:
     file: src/anthill/core/app.py
     responsibility: Handler registry keyed by function name.
+    construction: "App(log_dir: str = 'agents/logs/')"
+    attributes:
+      - "handlers: dict  # name -> fn mapping"
+      - "log_dir: str  # directory for per-run log files"
     interface:
       - "handler(fn) -> wrapper  # decorator that registers fn by fn.__name__"
       - "get_handler(name) -> Callable[[Runner, State], State | NoReturn]"
     design_constraint: >
       get_handler raises ValueError for unknown names. The decorator stores
-      the original fn (not the wrapper) in self.handlers.
+      the original fn (not the wrapper) in self.handlers. log_dir is passed
+      to Runner for per-run file logging.
 
   Runner:
     file: src/anthill/core/runner.py
     responsibility: >
-      Execution engine. Binds an App + Channel, generates a run_id, and
-      drives the workflow lifecycle.
+      Execution engine. Binds an App + Channel, generates a run id, sets up
+      per-run file logging, and drives the workflow lifecycle.
     construction: "Runner(app: App, channel: Channel)"
+    attributes:
+      - "id: str  # uuid4 hex[:8]"
+      - "channel: Channel"
+      - "app: App"
+      - "logger: logging.Logger  # per-run file logger (anthill.run.<id>)"
     interface:
       - "run() -> State  # merges channel.initial_state with run_id/workflow_name, calls workflow"
       - "workflow_name: property  # delegates to channel.workflow_name"
       - "workflow: property  # resolves handler via app.get_handler(workflow_name)"
-      - "report_progress(message) -> None  # delegates to channel"
-      - "report_error(message) -> None  # delegates to channel"
-      - "fail(message) -> NoReturn  # prints to stderr, exits(1)"
+      - "report_progress(message) -> None  # logs then delegates to channel"
+      - "report_error(message) -> None  # logs then delegates to channel"
+      - "fail(message) -> NoReturn  # logs, prints to stderr, exits(1)"
     design_constraint: >
-      run_id is uuid4 hex[:8]. Runner.run() builds initial state by
-      spreading channel.initial_state then adding run_id and workflow_name.
-      The workflow handler receives (runner, state) and returns State.
+      Runner.__init__ creates log dir (app.log_dir), sets up a FileHandler
+      writing to <log_dir>/<YYYYMMDDHHMMSS>-<id>.log. Logger propagate=False
+      to avoid console output. run() wraps workflow call in try/except to log
+      errors before re-raising.
 
   run_workflow:
     file: src/anthill/core/app.py
     signature: "run_workflow(runner: Runner, state: State, steps: list[Callable]) -> State"
     responsibility: >
       Sequential composition helper. Folds state through a list of handler
-      callables. Used inside composite handlers to chain sub-steps.
+      callables. Logs step names and completion via runner.logger.
 
 llm_types:
   Agent:
@@ -139,6 +168,7 @@ llm_types:
       prompt: >
         Runs `claude -p <prompt>` via subprocess. If model is set,
         inserts `--model <model>` flag. Returns stdout on success.
+        Logs prompt submission, response, and errors via module logger.
       errors:
         - "Non-zero exit → AgentExecutionError with stderr"
         - "Missing binary → AgentExecutionError('claude binary not found')"
@@ -181,7 +211,7 @@ data_flow:
   happy_path:
     - "CLI parses args → loads agents file → gets App"
     - "Builds CliChannel(workflow_name, initial_state)"
-    - "Runner(app, channel).run()"
+    - "Runner(app, channel).run() — creates log file, generates run id"
     - "Runner merges initial_state + {run_id, workflow_name}"
     - "Handler(runner, state) → new State"
     - "For composites: run_workflow folds state through sub-handlers"
@@ -194,9 +224,10 @@ data_flow:
     - "Handler spreads state + {result: response}"
   error_path:
     - "Unknown handler → ValueError from App.get_handler"
-    - "Handler calls runner.fail(msg) → stderr + SystemExit(1)"
-    - "Handler calls runner.report_error(msg) → channel.report_error → stderr"
+    - "Handler calls runner.fail(msg) → logs, stderr, SystemExit(1)"
+    - "Handler calls runner.report_error(msg) → logs, channel.report_error → stderr"
     - "Agent subprocess failure → AgentExecutionError propagates"
+    - "Workflow exception → Runner logs error, re-raises"
 
 testing_design:
   philosophy: >
@@ -209,14 +240,21 @@ testing_design:
     captures:
       - "progress_messages: list[str]"
       - "error_messages: list[str]"
-  fixture:
-    name: runner_factory
-    signature: "(app, workflow_name, initial_state=None) -> (Runner, TestChannel)"
+  fixtures:
+    app:
+      signature: "() -> App"
+      notes: "Creates App with log_dir set to a tempfile.mkdtemp() directory"
+    runner_factory:
+      signature: "(test_app=None, workflow_name='test', initial_state=None) -> (Runner, TestChannel)"
+      notes: "Uses injected app fixture by default; test_app overrides if provided"
+  test_structure: >
+    Tests organized into subdirectories mirroring src layout.
   test_files:
-    - tests/test_workflows.py — core engine paths (single, multi-step, failure, unknown)
-    - tests/test_cli_channel.py — CliChannel initial_state and attribute tests
+    - tests/core/test_workflows.py — core engine paths (single, multi-step, failure, unknown)
+    - tests/core/test_logging.py — per-run file logging verification
+    - tests/channels/test_cli_channel.py — CliChannel initial_state and attribute tests
     - tests/test_cli.py — CLI arg parsing and integration (temp agents file)
-    - tests/test_claude_code_agent.py — ClaudeCodeAgent subprocess and error handling
+    - tests/llm/test_claude_code_agent.py — ClaudeCodeAgent subprocess and error handling
 
 key_design_decisions:
   - >
@@ -226,6 +264,7 @@ key_design_decisions:
     framework object a handler interacts with.
   - >
     State is always a new dict (spread pattern). No mutation of incoming state.
+    State is ephemeral — never persisted or shared between workflow runs.
   - >
     run_workflow enables composition without inheritance or a DAG scheduler.
     Handlers that orchestrate other handlers just call run_workflow with a
@@ -239,3 +278,11 @@ key_design_decisions:
   - >
     CLI passes --prompt and --model into state dict. Handlers read these from
     state, keeping the Runner/Channel layer unaware of LLM concerns.
+  - >
+    Errors propagate by default. Handler errors (missing keys), runtime issues
+    (failed connections), and coding errors (naming mistakes) all propagate.
+    Only edge validations (e.g. missing CLI params) are caught and reported
+    when a stack trace would add no value.
+  - >
+    Per-run file logging. Each Runner creates an isolated log file. No console
+    logging from the framework. Module-level loggers provide debug tracing.

@@ -61,11 +61,40 @@ def persist_state(runner: Runner, state: State) -> State:
 
 ## Logging
 
-The framework does not use Python's logging module. All output goes through the `Channel` interface:
-- `report_progress()` for normal messages
-- `report_error()` for errors
+The framework provides file-based Python logging via the `Runner`. Each workflow run creates a dedicated log file.
 
-Handlers should not print directly. Use the `Runner` methods to ensure correct formatting and routing.
+### Configuration
+
+```python
+app = App(log_dir="my/logs/")  # custom directory
+app = App()                     # defaults to "agents/logs/"
+```
+
+### Per-Run Log Files
+
+`Runner.__init__` creates a log file at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
+
+```
+2026-02-07 14:30:00,123 [INFO] anthill.run.a1b2c3d4 - Workflow started: my_workflow
+```
+
+The framework logs lifecycle events (runner init, workflow start/complete), handler execution (step names, state keys), and errors at INFO/DEBUG/ERROR levels. Log output does not leak to stdout/stderr (logger propagation is disabled).
+
+### Using the Logger in Handlers
+
+Handlers can access `runner.logger` for custom logging:
+
+```python
+@app.handler
+def my_step(runner: Runner, state: State) -> State:
+    runner.logger.info("Starting work")
+    runner.logger.debug(f"State: {state}")
+    return {**state, "done": True}
+```
+
+### Module-Level Loggers
+
+Module-level loggers exist in `cli.py`, `channels/cli.py`, and `llm/claude_code.py`. These only produce output if a user configures handlers on them or their parents — they serve as extension points for additional logging.
 
 ## LLM Agent Execution
 

@@ -6,14 +6,13 @@ error handling, and handler resolution.
 
 import pytest
 
-from anthill.core.app import App, run_workflow
+from anthill.core.app import run_workflow
 from anthill.core.domain import State
 
 
 class TestWorkflows:
-    def test_single_handler(self, runner_factory):
+    def test_single_handler(self, app, runner_factory):
         """Test execution of a workflow with a single handler."""
-        app = App()
 
         @app.handler
         def add_1(runner, state: State) -> State:
@@ -25,9 +24,8 @@ class TestWorkflows:
         assert result["result"] == 11
         assert source.progress_messages == ["adding 1"]
 
-    def test_multi_step_workflow(self, runner_factory):
+    def test_multi_step_workflow(self, app, runner_factory):
         """Test execution of a workflow composed of multiple sequential handlers."""
-        app = App()
 
         @app.handler
         def add_1(runner, state: State) -> State:
@@ -48,9 +46,8 @@ class TestWorkflows:
         assert result["result"] == 22
         assert source.progress_messages == ["adding 1", "doubling"]
 
-    def test_failure(self, runner_factory):
+    def test_failure(self, app, runner_factory):
         """Test that workflow failure is propagated correctly via SystemExit."""
-        app = App()
 
         @app.handler
         def blow_up(runner, _state: State):
@@ -62,9 +59,8 @@ class TestWorkflows:
             runner.run()
         assert source.error_messages == ["something broke"]
 
-    def test_unknown_workflow(self, runner_factory):
+    def test_unknown_workflow(self, app, runner_factory):
         """Test that attempting to run an unregistered handler raises ValueError."""
-        app = App()
         runner, _source = runner_factory(app, "nonexistent")
         with pytest.raises(ValueError, match="Unknown handler: nonexistent"):
             runner.run()

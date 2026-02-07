@@ -1,23 +1,33 @@
 """Core domain types and protocols for the Anthill framework.
 
-This module defines the fundamental types used throughout the framework,
-including State for workflow data and Channel for communication.
+This module defines the fundamental types used throughout the framework:
+- State: Type alias for workflow data (dict[str, Any])
+- Channel: Protocol for I/O boundaries and workflow configuration
+
+These types form the foundation for handler signatures and runner operations.
 """
 from typing import Any, Protocol
 
 
 type State = dict[str, Any]
-"""State represents workflow data as a dictionary of key-value pairs."""
+"""State represents workflow data as a dictionary of key-value pairs.
+
+Handlers receive State as input and return a new State as output. State
+should be treated as immutable - always return a new copy with updates
+rather than modifying in place.
+"""
 
 
 class Channel(Protocol):
     """Protocol for communication channels that drive workflow execution.
 
-    Channels encapsulate the workflow configuration (type, name, initial state)
-    and provide methods for reporting progress and errors during execution.
+    Channels serve as I/O boundaries for workflows, defining what workflow to
+    run (workflow_name), what data to start with (initial_state), and how to
+    communicate progress (report_progress, report_error). Implementations adapt
+    workflows to different environments like CLI, web servers, or message queues.
 
     Attributes:
-        type: The channel type identifier (e.g., "cli", "api").
+        type: The channel type identifier (e.g., "cli", "api", "web").
         workflow_name: The name of the workflow to execute.
         initial_state: The initial state dictionary for the workflow.
     """

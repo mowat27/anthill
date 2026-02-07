@@ -1,4 +1,8 @@
-"""LLM agent error types."""
+"""LLM agent error types.
+
+This module defines custom exceptions for LLM agent operations. These
+exceptions provide structured error handling for agent execution failures.
+"""
 
 
 class AgentExecutionError(Exception):
@@ -6,4 +10,8 @@ class AgentExecutionError(Exception):
 
     This exception is raised when the Claude Code CLI cannot be found,
     returns a non-zero exit code, or encounters other execution failures.
+
+    Attributes:
+        message: Human-readable description of the error, including any
+                stderr output from the failed subprocess call.
     """

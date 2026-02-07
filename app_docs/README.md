@@ -4,9 +4,9 @@ This directory contains policy and pattern documentation for the Anthill workflo
 
 ## Files
 
-- **testing_policy.md** - Testing approach, fixture management, and test structure rules. Covers how to write tests for the framework core, not application handlers.
+- **testing_policy.md** - Testing approach, fixture management, test structure rules, and test organization. Covers how to write tests for the framework core, including the `app` fixture for log isolation.
 
-- **instrumentation.md** - Progress reporting, error handling, run identification, and state persistence patterns. Explains the Channel interface for I/O and how handlers communicate status.
+- **instrumentation.md** - Progress reporting, error handling, run identification, logging patterns, and state persistence. Explains the Channel interface for I/O, how handlers communicate status, and how to use per-run file-based logging.
 
 ## Usage
 
