@@ -9,7 +9,7 @@ Usage:
     ngrok http 9000
 
     # Terminal 2: spike server
-    COOLDOWN_SECONDS=5 uv run uvicorn spike:app --reload --port 9000
+    COOLDOWN_SECONDS=5 SLACK_BOT_TOKEN=xoxb-... uv run uvicorn spike:app --reload --port 9000
 
 Then configure your Slack app's Event Subscription URL to:
     https://<ngrok-id>.ngrok-free.app/event
@@ -21,14 +21,20 @@ import asyncio
 import json
 import os
 import re
+
+from dotenv import load_dotenv
+
+load_dotenv()
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 COOLDOWN_SECONDS = int(os.environ.get("COOLDOWN_SECONDS", "30"))
 BOT_USER_ID = os.environ.get("BOT_USER_ID", "")
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 
 app = FastAPI()
 
@@ -55,6 +61,15 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _is_bot_message(event: dict) -> bool:
+    """Check if this event was sent by our bot."""
+    if event.get("bot_id"):
+        return True
+    if BOT_USER_ID and event.get("user") == BOT_USER_ID:
+        return True
+    return False
+
+
 def _is_bot_mention(text: str) -> bool:
     """Check if the message text mentions our bot."""
     if BOT_USER_ID:
@@ -77,7 +92,7 @@ def _pending_snapshot() -> list[dict]:
                 "key": f"({channel}, {ts})",
                 "text": msg.text,
                 "user": msg.user,
-                "files": msg.files,
+                "files": [f.get("name") for f in msg.files],
                 "received_at": msg.received_at.isoformat(),
                 "updated_at": msg.updated_at.isoformat(),
                 "fires_at": msg.fires_at.isoformat(),
@@ -98,6 +113,33 @@ def _print_state(header: str) -> None:
         print(json.dumps(_pending_snapshot(), indent=2))
     print("═" * 60)
     print(flush=True)
+
+
+async def _slack_api(method: str, payload: dict) -> dict:
+    """Call a Slack API method. Returns the response JSON."""
+    if not SLACK_BOT_TOKEN:
+        print(f"  [warn] SLACK_BOT_TOKEN not set, skipping {method}", flush=True)
+        return {"ok": False, "error": "no_token"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"https://slack.com/api/{method}",
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            json=payload,
+        )
+        data = resp.json()
+        if not data.get("ok"):
+            print(f"  [error] {method} failed: {json.dumps(data, indent=2)}", flush=True)
+        return data
+
+
+async def _slack_react(channel: str, ts: str, emoji: str) -> None:
+    """Add an emoji reaction to a message."""
+    await _slack_api("reactions.add", {"channel": channel, "timestamp": ts, "name": emoji})
+
+
+async def _slack_reply(channel: str, thread_ts: str, text: str) -> None:
+    """Post a threaded reply to Slack."""
+    await _slack_api("chat.postMessage", {"channel": channel, "thread_ts": thread_ts, "text": text})
 
 
 def _schedule_fire(channel: str, ts: str) -> asyncio.Task:
@@ -121,11 +163,17 @@ async def _on_timer_fire(channel: str, ts: str) -> None:
     print("🔔 " * 20, flush=True)
     _print_state("After timer fire")
 
+    file_names = [f.get("name") for f in msg.files]
+    reply = f"Cooldown expired — no more edits will be accepted.\nProcessing: {msg.text!r}"
+    if file_names:
+        reply += f"\nFiles: {', '.join(file_names)}"
+    await _slack_reply(channel, ts, reply)
+
 
 # ── Event handlers ───────────────────────────────────────────────────
 
 
-def _handle_app_mention(event: dict) -> None:
+async def _handle_app_mention(event: dict) -> None:
     channel = event["channel"]
     ts = event["ts"]
     user = event.get("user", "unknown")
@@ -152,9 +200,10 @@ def _handle_app_mention(event: dict) -> None:
         timer=timer,
     )
     _print_state(f"EVENT: app_mention from {user} in {channel}")
+    await _slack_react(channel, ts, "thumbsup")
 
 
-def _handle_message_changed(event: dict) -> None:
+async def _handle_message_changed(event: dict) -> None:
     channel = event["channel"]
     inner = event.get("message", {})
     ts = inner.get("ts", "")
@@ -179,9 +228,10 @@ def _handle_message_changed(event: dict) -> None:
     msg.timer = _schedule_fire(channel, ts)
 
     _print_state(f"EVENT: message_changed in {channel} ts={ts}")
+    await _slack_react(channel, ts, "thumbsup")
 
 
-def _handle_thread_reply(event: dict) -> None:
+async def _handle_thread_reply(event: dict) -> None:
     channel = event["channel"]
     thread_ts = event["thread_ts"]
     key = (channel, thread_ts)
@@ -210,9 +260,10 @@ def _handle_thread_reply(event: dict) -> None:
     msg.timer = _schedule_fire(channel, thread_ts)
 
     _print_state(f"EVENT: thread_reply in {channel} thread_ts={thread_ts}")
+    await _slack_react(channel, event["ts"], "thumbsup")
 
 
-def _handle_message_deleted(event: dict) -> None:
+async def _handle_message_deleted(event: dict) -> None:
     channel = event["channel"]
     ts = event.get("deleted_ts", "")
     key = (channel, ts)
@@ -247,20 +298,24 @@ async def slack_event(request: Request) -> JSONResponse:
         etype = event.get("type")
         subtype = event.get("subtype")
 
+        # Ignore messages from our own bot
+        if _is_bot_message(event):
+            return JSONResponse({"ok": True})
+
         thread_ts = event.get("thread_ts")
         is_thread_reply = thread_ts is not None and event.get("ts") != thread_ts
 
         if is_thread_reply and etype == "message" and subtype in (None, "file_share"):
             # Thread reply (text or file) — check if parent is pending
-            _handle_thread_reply(event)
+            await _handle_thread_reply(event)
         elif etype == "app_mention":
-            _handle_app_mention(event)
+            await _handle_app_mention(event)
         elif etype == "message" and subtype in (None, "file_share") and _is_bot_mention(event.get("text", "")):
             # Plain message or file_share with bot mention (from message.channels subscription)
-            _handle_app_mention(event)
+            await _handle_app_mention(event)
         elif etype == "message" and subtype == "message_changed":
-            _handle_message_changed(event)
+            await _handle_message_changed(event)
         elif etype == "message" and subtype == "message_deleted":
-            _handle_message_deleted(event)
+            await _handle_message_deleted(event)
 
     return JSONResponse({"ok": True})
