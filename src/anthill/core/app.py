@@ -39,6 +39,7 @@ class App:
         handlers: Dictionary mapping handler names to their functions.
         log_dir: Directory path where Runner instances will write log files.
         worktree_dir: Directory path where git worktrees will be created.
+        state_dir: Directory path where Runner instances will write state files.
     """
     def __init__(self, log_dir: str = "agents/logs/", worktree_dir: str = "trees/", state_dir: str = ".anthill/state/") -> None:
         """Initialize a new App instance with an empty handler registry.

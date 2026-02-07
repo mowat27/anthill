@@ -11,7 +11,7 @@ class AgentExecutionError(Exception):
     This exception is raised when the Claude Code CLI cannot be found,
     returns a non-zero exit code, or encounters other execution failures.
 
-    Attributes:
+    Args:
         message: Human-readable description of the error, including any
-                stderr output from the failed subprocess call.
+            stderr output from the failed subprocess call.
     """

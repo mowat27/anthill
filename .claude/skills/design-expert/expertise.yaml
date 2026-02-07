@@ -111,6 +111,15 @@ architecture:
     and git/worktrees.py for debug tracing. No console logging by default —
     all framework logs go to files.
 
+  state_persistence: >
+    Automatic JSON-based state snapshots. Runner writes state to
+    <app.state_dir>/<timestamp>-<id>.json. State is persisted at three points:
+    (1) before workflow execution (initial state with run_id/workflow_name),
+    (2) after each run_workflow step completes, and (3) after workflow execution
+    completes (final state). The state file and log file share the same
+    <timestamp>-<id> base name for easy correlation. State files use formatted
+    JSON (indent=2) for human readability.
+
 domain_types:
   WorkflowFailedError:
     file: src/anthill/core/domain.py
@@ -145,11 +154,12 @@ core_objects:
   App:
     file: src/anthill/core/app.py
     responsibility: Handler registry keyed by function name.
-    construction: "App(log_dir: str = 'agents/logs/', worktree_dir: str = 'trees/')"
+    construction: "App(log_dir: str = 'agents/logs/', worktree_dir: str = 'trees/', state_dir: str = '.anthill/state/')"
     attributes:
       - "handlers: dict  # name -> fn mapping"
       - "log_dir: str  # directory for per-run log files"
       - "worktree_dir: str  # directory for git worktrees"
+      - "state_dir: str  # directory for per-run state JSON files"
     interface:
       - "handler(fn) -> wrapper  # decorator that registers fn by fn.__name__"
       - "get_handler(name) -> Callable[[Runner, State], State | NoReturn]"
@@ -157,7 +167,8 @@ core_objects:
       get_handler raises ValueError for unknown names. The decorator stores
       the original fn (not the wrapper) in self.handlers. log_dir is passed
       to Runner for per-run file logging. worktree_dir is used by handlers
-      (e.g. sdlc_iso) to locate worktree base directories.
+      (e.g. sdlc_iso) to locate worktree base directories. state_dir is
+      passed to Runner for per-run state JSON persistence.
 
   Runner:
     file: src/anthill/core/runner.py
@@ -170,27 +181,34 @@ core_objects:
       - "channel: Channel"
       - "app: App"
       - "logger: logging.Logger  # per-run file logger (anthill.run.<id>)"
+      - "_state_path: str  # absolute path to per-run state JSON file"
     interface:
-      - "run() -> State  # merges channel.initial_state with run_id/workflow_name, calls workflow"
+      - "run() -> State  # merges channel.initial_state with run_id/workflow_name, persists state before/after workflow, calls workflow"
+      - "_persist_state(state: State) -> None  # writes state dict to _state_path as formatted JSON"
       - "workflow_name: property  # delegates to channel.workflow_name"
       - "workflow: property  # resolves handler via app.get_handler(workflow_name)"
       - "report_progress(message) -> None  # logs then delegates to channel"
       - "report_error(message) -> None  # logs then delegates to channel"
       - "fail(message) -> NoReturn  # logs, raises WorkflowFailedError"
     design_constraint: >
-      Runner.__init__ creates log dir (app.log_dir), sets up a FileHandler
-      writing to <log_dir>/<YYYYMMDDHHMMSS>-<id>.log. Logger propagate=False
-      to avoid console output. run() wraps workflow call in try/except to log
-      errors before re-raising. fail() raises WorkflowFailedError instead of
-      calling exit(1) — this allows CLI and API to handle failures differently
-      (CLI exits, API continues serving).
+      Runner.__init__ creates log dir (app.log_dir) and state dir (app.state_dir),
+      sets up a FileHandler writing to <log_dir>/<YYYYMMDDHHMMSS>-<id>.log and
+      a state file at <state_dir>/<YYYYMMDDHHMMSS>-<id>.json. Logger propagate=False
+      to avoid console output. run() persists state before and after workflow
+      execution via _persist_state(). run_workflow() also calls _persist_state()
+      after each step completes, enabling mid-workflow state recovery. run() wraps
+      workflow call in try/except to log errors before re-raising. fail() raises
+      WorkflowFailedError instead of calling exit(1) — this allows CLI and API
+      to handle failures differently (CLI exits, API continues serving).
 
   run_workflow:
     file: src/anthill/core/app.py
     signature: "run_workflow(runner: Runner, state: State, steps: list[Callable]) -> State"
     responsibility: >
       Sequential composition helper. Folds state through a list of handler
-      callables. Logs step names and completion via runner.logger.
+      callables. Logs step names and completion via runner.logger. Persists
+      state to disk (via runner._persist_state) after each step completes,
+      enabling mid-workflow state inspection and recovery.
 
 git_objects:
   WorktreeError:
@@ -510,7 +528,7 @@ testing_design:
   fixtures:
     app:
       signature: "() -> App"
-      notes: "Creates App with log_dir and worktree_dir both set to tempfile.mkdtemp() directories"
+      notes: "Creates App with log_dir, worktree_dir, and state_dir each set to separate tempfile.mkdtemp() directories"
     runner_factory:
       signature: "(test_app=None, workflow_name='test', initial_state=None) -> (Runner, TestChannel)"
       notes: "Uses injected app fixture by default; test_app overrides if provided"
@@ -524,7 +542,8 @@ testing_design:
     Tests organized into subdirectories mirroring src layout.
   test_files:
     - tests/core/test_workflows.py — core engine paths (single, multi-step, failure raises WorkflowFailedError, unknown)
-    - tests/core/test_logging.py — per-run file logging, App config (log_dir, worktree_dir defaults)
+    - tests/core/test_logging.py — per-run file logging, App config (log_dir, worktree_dir, state_dir defaults)
+    - tests/core/test_state_persistence.py — state file creation, naming format, content, per-step persistence, log/state filename correlation
     - tests/channels/test_cli_channel.py — CliChannel initial_state and attribute tests
     - tests/channels/test_api_channel.py — ApiChannel type, initial_state, stdout/stderr reporting
     - tests/test_cli.py — CLI arg parsing, mutual exclusion, prompt-file loading, WorkflowFailedError handling, integration
@@ -542,7 +561,9 @@ key_design_decisions:
     framework object a handler interacts with.
   - >
     State is always a new dict (spread pattern). No mutation of incoming state.
-    State is ephemeral — never persisted or shared between workflow runs.
+    State is automatically persisted to JSON files during workflow execution
+    (before, after each step, and on completion) but is never shared between
+    workflow runs — each run writes its own isolated state file.
   - >
     run_workflow enables composition without inheritance or a DAG scheduler.
     Handlers that orchestrate other handlers just call run_workflow with a
@@ -591,3 +612,11 @@ key_design_decisions:
     create_app() with custom agents file. Module-level app = create_app()
     provides default instance for uvicorn to import. The --agents-file CLI
     option is propagated via ANTHILL_AGENTS_FILE environment variable.
+  - >
+    Automatic state persistence. Runner persists state as JSON to
+    <state_dir>/<timestamp>-<id>.json at key lifecycle points: before
+    workflow, after each run_workflow step, and after completion. State
+    and log files share the same <timestamp>-<id> base name for
+    correlation. App.state_dir configures the directory (default
+    ".anthill/state/"). This enables debugging and mid-workflow recovery
+    without handlers needing explicit persistence logic.

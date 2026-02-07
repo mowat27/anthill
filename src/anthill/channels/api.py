@@ -18,16 +18,17 @@ class ApiChannel:
     in server logs.
 
     Attributes:
-        type: Channel type identifier ("api").
-        workflow_name: Name of the workflow to execute.
-        initial_state: Initial state dictionary for the workflow.
+        type (str): Channel type identifier ("api").
+        workflow_name (str): Name of the workflow to execute.
+        initial_state (State): Initial state dictionary for the workflow.
     """
     def __init__(self, workflow_name: str, initial_state: dict[str, str] | None = None) -> None:
         """Initialize an ApiChannel instance.
 
         Args:
-            workflow_name: Name of the workflow to execute.
-            initial_state: Optional initial state dictionary. Defaults to empty dict.
+            workflow_name (str): Name of the workflow to execute.
+            initial_state (dict[str, str] | None): Optional initial state dictionary.
+                Defaults to empty dict.
         """
         self.type = "api"
         self.workflow_name = workflow_name
@@ -37,9 +38,9 @@ class ApiChannel:
         """Report workflow progress to stdout.
 
         Args:
-            run_id: Unique identifier for the workflow run.
-            message: Progress message to report.
-            **opts: Additional options passed to print() function.
+            run_id (str): Unique identifier for the workflow run.
+            message (str): Progress message to report.
+            **opts (Any): Additional options passed to print() function.
         """
         print(f"[{self.workflow_name}, {run_id}] {message}", flush=True, **opts)
 
@@ -47,7 +48,7 @@ class ApiChannel:
         """Report a workflow error to stderr.
 
         Args:
-            run_id: Unique identifier for the workflow run.
-            message: Error message to report.
+            run_id (str): Unique identifier for the workflow run.
+            message (str): Error message to report.
         """
         self.report_progress(run_id, message, file=sys.stderr)

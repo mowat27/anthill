@@ -38,6 +38,7 @@ class Runner:
     Each Runner instance is specific to a single workflow execution and includes:
     - A unique 8-character hex ID for tracking
     - A dedicated file logger writing to app.log_dir
+    - A dedicated state file writing to app.state_dir
     - Methods for progress/error reporting that delegate to the channel
     - A fail() method for terminating workflows with error messages
 
@@ -87,8 +88,9 @@ class Runner:
         """Execute the workflow with initial state setup.
 
         Sets up the initial state with run_id and workflow_name, invokes the
-        workflow handler, and logs the execution lifecycle. Any exceptions
-        during workflow execution are logged and re-raised.
+        workflow handler, persists state before and after execution, and logs
+        the execution lifecycle. Any exceptions during workflow execution are
+        logged and re-raised.
 
         Returns:
             The final state after workflow execution completes.

@@ -8,8 +8,6 @@ Handlers: `def step(runner: Runner, state: State) -> State`. Chain via `run_work
 
 **Logging**: `App(log_dir=..., worktree_dir=..., state_dir=...)` sets dirs (defaults `agents/logs/`, `trees/`, `.anthill/state/`). `Runner` creates per-run log `{timestamp}-{run_id}.log` and state `{timestamp}-{run_id}.json`. State persisted automatically. Use `runner.logger.info()` in handlers.
 
-**Logging**: `App(log_dir=..., worktree_dir=...)` sets dirs (defaults `agents/logs/`, `trees/`). `Runner` creates per-run log `{timestamp}-{run_id}.log`. Use `runner.logger.info()`.
-
 **Git worktrees**: `Worktree(base_dir, name)`. `git_worktree(wt, create=True, branch="feat", remove=False)` context manager guarantees cwd restore. Paths absolute.
 
 **API server**: `anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py`. POST `/webhook` with `{"workflow_name": "wf", "initial_state": {}}`, returns `{"run_id": "..."}`. Runs background task.
