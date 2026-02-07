@@ -11,10 +11,12 @@ requested workflow through a CliChannel.
 import argparse
 import importlib.util
 import logging
+import os
 import sys
 from pathlib import Path
 
 from anthill.channels.cli import CliChannel
+from anthill.core.domain import WorkflowFailedError
 from anthill.core.runner import Runner
 
 logger = logging.getLogger("anthill.cli")
@@ -102,6 +104,12 @@ def main() -> None:
     run_parser.add_argument("--model", default=None)
     run_parser.add_argument("workflow_name")
 
+    server_parser = subparsers.add_parser("server")
+    server_parser.add_argument("--host", default="127.0.0.1")
+    server_parser.add_argument("--port", type=int, default=8000)
+    server_parser.add_argument("--reload", action="store_true")
+    server_parser.add_argument("--agents-file", default="handlers.py")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -139,9 +147,19 @@ def main() -> None:
         channel = CliChannel(workflow_name=args.workflow_name, initial_state=state)
         runner = Runner(app, channel)
         logger.info(f"Runner created: run_id={runner.id}")
-        result = runner.run()
+        try:
+            result = runner.run()
+        except WorkflowFailedError as e:
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
         logger.info("Workflow run complete")
         print(result)
+
+    elif args.command == "server":
+        import uvicorn
+
+        os.environ["ANTHILL_AGENTS_FILE"] = args.agents_file
+        uvicorn.run("anthill.server:app", host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":

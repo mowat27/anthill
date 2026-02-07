@@ -8,13 +8,18 @@ overview:
     Lightweight Python workflow engine. Users define handlers (workflow steps)
     via a decorator-based App, wire them to a Channel (I/O boundary), and
     execute through a Runner. Designed for composable, testable pipelines.
+    Supports both CLI and HTTP API execution.
   python: ">=3.12"
   build: uv (uv_build backend)
   entry_point: "anthill.cli:main"
-  quality_tools:
+  dependencies:
     - ruff (lint)
     - ty (type-check)
+    - fastapi (web framework)
+    - uvicorn[standard] (ASGI server)
+  dev_dependencies:
     - pytest (test)
+    - httpx (FastAPI TestClient)
   justfile_default: "check -> ruff, ty, test"
   justfile_recipes:
     - "sdlc prompt model='opus' — runs sdlc workflow, auto-detects --prompt vs --prompt-file"
@@ -51,7 +56,8 @@ architecture:
         and owns how progress/errors are reported and what initial state is
         supplied. Channels are the seam where tests swap in doubles.
       modules:
-        - cli.py
+        - cli.py  # CliChannel for command-line execution
+        - api.py  # ApiChannel for HTTP API execution
 
     - name: llm
       path: src/anthill/llm/
@@ -87,7 +93,16 @@ architecture:
       responsibility: >
         Argparse-based CLI entry point. Loads a user-supplied agents file
         (Python module exporting `app`), builds a CliChannel, and runs
-        the workflow via Runner.
+        the workflow via Runner. Also provides server subcommand that starts
+        uvicorn for HTTP API access.
+
+    - name: server
+      path: src/anthill/server.py
+      responsibility: >
+        FastAPI server module exposing workflows via HTTP webhooks. Provides
+        POST /webhook endpoint that accepts workflow_name and initial_state,
+        creates Runner with ApiChannel, and runs workflow as background task.
+        Returns run_id immediately for async execution tracking.
 
   logging: >
     File-based per-run logging via Python stdlib logging. Runner creates a
@@ -97,6 +112,14 @@ architecture:
     all framework logs go to files.
 
 domain_types:
+  WorkflowFailedError:
+    file: src/anthill/core/domain.py
+    definition: "class WorkflowFailedError(Exception)"
+    notes: >
+      Raised by Runner.fail() to signal workflow failure. Replaces the previous
+      SystemExit behavior. CLI catches this and exits with code 1. API server
+      catches it silently (already logged by Runner).
+
   State:
     file: src/anthill/core/domain.py
     definition: "type State = dict[str, Any]"
@@ -153,12 +176,14 @@ core_objects:
       - "workflow: property  # resolves handler via app.get_handler(workflow_name)"
       - "report_progress(message) -> None  # logs then delegates to channel"
       - "report_error(message) -> None  # logs then delegates to channel"
-      - "fail(message) -> NoReturn  # logs, prints to stderr, exits(1)"
+      - "fail(message) -> NoReturn  # logs, raises WorkflowFailedError"
     design_constraint: >
       Runner.__init__ creates log dir (app.log_dir), sets up a FileHandler
       writing to <log_dir>/<YYYYMMDDHHMMSS>-<id>.log. Logger propagate=False
       to avoid console output. run() wraps workflow call in try/except to log
-      errors before re-raising.
+      errors before re-raising. fail() raises WorkflowFailedError instead of
+      calling exit(1) — this allows CLI and API to handle failures differently
+      (CLI exits, API continues serving).
 
   run_workflow:
     file: src/anthill/core/app.py
@@ -253,8 +278,24 @@ channel_implementations:
       report_progress: "Prints formatted [workflow_name, run_id] message to stdout"
       report_error: "Delegates to report_progress with file=sys.stderr"
 
+  ApiChannel:
+    file: src/anthill/channels/api.py
+    satisfies: Channel protocol
+    construction: "ApiChannel(workflow_name: str, initial_state: dict[str,str] | None = None)"
+    behavior:
+      type: '"api"'
+      initial_state: "Copies input dict or defaults to {}"
+      report_progress: "Prints formatted [workflow_name, run_id] message to stdout with flush=True"
+      report_error: "Delegates to report_progress with file=sys.stderr"
+    notes: >
+      Identical to CliChannel except type="api" and flush=True on progress
+      prints. Designed for FastAPI server where output goes to Uvicorn logs.
+
 cli_entry_point:
   file: src/anthill/cli.py
+  shared_functions:
+    - "load_app(path: str) -> App  # dynamically imports module, extracts app attr"
+    - "parse_state_pairs(pairs: list[str]) -> dict[str, str]  # splits key=val strings"
   subcommands:
     run:
       args:
@@ -273,13 +314,79 @@ cli_entry_point:
         5. Merges --model into state dict if provided
         6. Builds CliChannel with workflow_name, initial_state=dict
         7. Creates Runner(app, channel) and calls runner.run()
-        8. Prints result dict to stdout
+        8. Wraps runner.run() in try/except for WorkflowFailedError
+        9. On WorkflowFailedError: prints to stderr, exits 1
+        10. On success: prints result dict to stdout
       error_handling:
         - "FileNotFoundError -> agents file not found"
         - "AttributeError -> agents file has no 'app'"
         - "FileNotFoundError -> prompt file not found (--prompt-file)"
         - "Invalid state pair (no '=') -> stderr + exit(1)"
+        - "WorkflowFailedError -> stderr + exit(1)"
+
+    server:
+      args:
+        - "--host (default: 127.0.0.1) — uvicorn bind host"
+        - "--port (default: 8000) — uvicorn bind port"
+        - "--reload (flag) — enable uvicorn auto-reload"
+        - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
+      flow: >
+        1. Sets ANTHILL_AGENTS_FILE environment variable to args.agents_file
+        2. Calls uvicorn.run("anthill.server:app", host, port, reload)
+        3. Uvicorn imports anthill.server module and loads the app object
+      notes: >
+        The --agents-file is propagated to create_app() via environment variable
+        because uvicorn.run() imports the module string "anthill.server:app" and
+        the factory needs the path at import time.
+
   no_subcommand: "Prints help and exits 0"
+
+server_module:
+  file: src/anthill/server.py
+  purpose: >
+    FastAPI server exposing workflows via HTTP webhooks. Workflows run as
+    background tasks and return immediately with a run_id for tracking.
+  types:
+    WebhookRequest:
+      definition: "pydantic.BaseModel"
+      fields:
+        - "workflow_name: str"
+        - "initial_state: dict[str, Any] = {}"
+    WebhookResponse:
+      definition: "pydantic.BaseModel"
+      fields:
+        - "run_id: str"
+  functions:
+    _run_workflow:
+      signature: "_run_workflow(runner: Runner) -> None"
+      responsibility: >
+        Background task wrapper that executes runner.run(). Catches
+        WorkflowFailedError silently (already logged) and logs unexpected
+        errors to stderr.
+    create_app:
+      signature: "create_app(agents_file: str = os.environ.get('ANTHILL_AGENTS_FILE', 'handlers.py')) -> FastAPI"
+      responsibility: >
+        Factory function that loads the Anthill app from agents_file and
+        creates a FastAPI instance with a POST /webhook endpoint. Returns
+        the configured FastAPI app.
+      endpoint_POST_webhook:
+        signature: "async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks) -> WebhookResponse"
+        behavior: >
+          1. Validates workflow exists via app.get_handler() — raises HTTPException 404 if not found
+          2. Creates ApiChannel with request.workflow_name and request.initial_state
+          3. Creates Runner(app, channel)
+          4. Schedules _run_workflow(runner) as background task
+          5. Returns WebhookResponse with runner.id
+        errors:
+          - "Unknown workflow_name -> HTTPException 404"
+          - "Invalid request body (missing workflow_name) -> FastAPI auto-returns 422"
+  module_level:
+    app: "app = create_app()  # Default instance for uvicorn to import"
+  design_constraint: >
+    Uses FastAPI BackgroundTasks which runs in same process after response.
+    For long workflows, this blocks a worker thread. Acceptable for initial
+    implementation; production can use uvicorn with multiple workers. Pydantic
+    models required for FastAPI request validation and OpenAPI docs.
 
 handlers_file:
   file: handlers.py
@@ -346,7 +453,7 @@ handlers_file:
       state_out: ["feature_type", "slug", "spec_file", "implement_status", "document_status", "worktree_path", "branch_name"]
 
 data_flow:
-  happy_path:
+  cli_happy_path:
     - "CLI parses args -> loads agents file -> gets App"
     - "Builds CliChannel(workflow_name, initial_state)"
     - "Runner(app, channel).run() — creates log file, generates run id"
@@ -354,6 +461,15 @@ data_flow:
     - "Handler(runner, state) -> new State"
     - "For composites: run_workflow folds state through sub-handlers"
     - "Result state printed to stdout"
+  api_happy_path:
+    - "POST /webhook with {workflow_name, initial_state} JSON body"
+    - "Server validates workflow exists via app.get_handler()"
+    - "Creates ApiChannel(workflow_name, initial_state)"
+    - "Creates Runner(app, channel) — generates run_id"
+    - "Schedules _run_workflow(runner) as FastAPI background task"
+    - "Returns {run_id} JSON response immediately (200)"
+    - "Background task calls runner.run() -> workflow executes asynchronously"
+    - "Progress/error output goes to Uvicorn logs (stdout/stderr)"
   llm_path:
     - "Handler extracts prompt and model from state"
     - "Creates ClaudeCodeAgent(model=state.get('model'))"
@@ -369,12 +485,16 @@ data_flow:
     - "Returns state with worktree_path and branch_name added"
   error_path:
     - "Unknown handler -> ValueError from App.get_handler"
-    - "Handler calls runner.fail(msg) -> logs, stderr, SystemExit(1)"
+    - "Handler calls runner.fail(msg) -> logs, raises WorkflowFailedError"
+    - "CLI catches WorkflowFailedError -> prints to stderr, exit(1)"
+    - "API catches WorkflowFailedError -> logs only (already logged by Runner), continues serving"
     - "Handler calls runner.report_error(msg) -> logs, channel.report_error -> stderr"
     - "Agent subprocess failure -> AgentExecutionError propagates"
     - "Workflow exception -> Runner logs error, re-raises"
     - "Worktree creation failure -> WorktreeError propagates"
     - "Entering non-existent worktree (create=False) -> WorktreeError"
+    - "API unknown workflow -> HTTPException 404 before creating Runner"
+    - "API invalid request body -> FastAPI auto-returns 422"
 
 testing_design:
   philosophy: >
@@ -403,10 +523,12 @@ testing_design:
   test_structure: >
     Tests organized into subdirectories mirroring src layout.
   test_files:
-    - tests/core/test_workflows.py — core engine paths (single, multi-step, failure, unknown)
+    - tests/core/test_workflows.py — core engine paths (single, multi-step, failure raises WorkflowFailedError, unknown)
     - tests/core/test_logging.py — per-run file logging, App config (log_dir, worktree_dir defaults)
     - tests/channels/test_cli_channel.py — CliChannel initial_state and attribute tests
-    - tests/test_cli.py — CLI arg parsing, mutual exclusion, prompt-file loading, integration
+    - tests/channels/test_api_channel.py — ApiChannel type, initial_state, stdout/stderr reporting
+    - tests/test_cli.py — CLI arg parsing, mutual exclusion, prompt-file loading, WorkflowFailedError handling, integration
+    - tests/test_server.py — FastAPI webhook endpoint (returns run_id, 404 for unknown workflow, 422 for invalid body)
     - tests/llm/test_claude_code_agent.py — ClaudeCodeAgent subprocess and error handling
     - tests/helpers/test_extract_json.py — JSON extraction from LLM responses
     - tests/git/test_worktree.py — Worktree class (path, exists, create, create+branch, remove, errors)
@@ -450,3 +572,22 @@ key_design_decisions:
     feature development without cwd or branch conflicts. Worktrees are kept
     after workflow completion (remove=False) so developers can inspect results.
     App.worktree_dir configures the base directory (default "trees/").
+  - >
+    BREAKING: Runner.fail() raises WorkflowFailedError instead of exit(1).
+    This decouples workflow failure from process termination, enabling both
+    CLI (which exits) and API (which continues serving) to handle failures
+    appropriately. CLI catches WorkflowFailedError and exits 1. API server
+    catches it in background task and continues serving other requests.
+  - >
+    Dual execution model: CLI and HTTP API. CliChannel and ApiChannel are
+    nearly identical (both print to stdout/stderr) but have different type
+    identifiers. The server module provides POST /webhook for async workflow
+    execution. FastAPI BackgroundTasks runs workflows in same process after
+    response — acceptable for initial implementation, production can scale
+    with multiple uvicorn workers.
+  - >
+    Server factory pattern: create_app() loads agents file and returns
+    configured FastAPI instance. This makes testing possible — tests call
+    create_app() with custom agents file. Module-level app = create_app()
+    provides default instance for uvicorn to import. The --agents-file CLI
+    option is propagated via ANTHILL_AGENTS_FILE environment variable.

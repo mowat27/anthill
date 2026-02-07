@@ -20,6 +20,18 @@ app = App()
 
 
 @app.handler
+def healthcheck(runner: Runner, state: State) -> State:
+    """Verify the agent pipeline is working by asking Claude to write a short poem."""
+    runner.report_progress("Running healthcheck")
+    agent = ClaudeCodeAgent(model=state.get("model"))
+    response = agent.prompt("Write a short poem about agentic coding")
+    runner.logger.info(f"healthcheck response: {response}")
+    runner.report_progress("Healthcheck complete")
+    runner.report_progress(response)
+    return {**state, "poem": response}
+
+
+@app.handler
 def specify(runner: Runner, state: State) -> State:
     """Generate a specification and extract spec_file and slug from the response."""
     runner.report_progress("Running /specify")

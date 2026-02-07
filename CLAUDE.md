@@ -2,25 +2,31 @@
 
 Workflow engine. `@app.handler` registers handlers, `Runner` executes them.
 
-**State** = `dict[str, Any]`, always return new copy. **Channel** = I/O boundary. **App** = handler registry. **Runner** = App + Channel. **Agent** = LLM wrapper (`ClaudeCodeAgent` wraps `claude` CLI). **Worktree** = git worktree wrapper for isolated execution.
+**State** = `dict[str, Any]`, return new copy. **Channel** = I/O boundary (CliChannel, ApiChannel). **App** = handler registry. **Runner** = App + Channel. **Agent** = LLM wrapper (`ClaudeCodeAgent` wraps `claude` CLI). **Worktree** = git worktree wrapper.
 
 Handlers: `def step(runner: Runner, state: State) -> State`. Chain via `run_workflow(runner, state, [step1, step2])`.
 
-**Logging**: `App(log_dir=..., worktree_dir=...)` sets dirs (defaults `agents/logs/`, `trees/`). `Runner` creates per-run log `{timestamp}-{run_id}.log`. Use `runner.logger.info()` in handlers.
+**Error handling**: `runner.fail(msg)` raises `WorkflowFailedError`. CLI catches, prints stderr, exits 1. API server catches, logs, continues.
 
-**Git worktrees**: `Worktree(base_dir, name)` wraps git operations. `git_worktree(wt, create=True, branch="feat", remove=False)` context manager guarantees cwd restore via try/finally. Paths absolute, safe after chdir.
+**Logging**: `App(log_dir=..., worktree_dir=...)` sets dirs (defaults `agents/logs/`, `trees/`). `Runner` creates per-run log `{timestamp}-{run_id}.log`. Use `runner.logger.info()`.
+
+**Git worktrees**: `Worktree(base_dir, name)`. `git_worktree(wt, create=True, branch="feat", remove=False)` context manager guarantees cwd restore. Paths absolute.
+
+**API server**: `anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py`. POST `/webhook` with `{"workflow_name": "wf", "initial_state": {}}`, returns `{"run_id": "..."}`. Runs background task.
 
 ## Testing
-- Tests mirror source: `tests/core/`, `tests/channels/`, `tests/llm/`, `tests/git/`
-- Use `app` fixture (temp log+worktree dirs), `runner_factory` for Runner+TestChannel
-- Git tests use `git_repo` fixture from `tests/git/conftest.py`
-- Each test owns setup, no shared state
-- One test per code path
+- Mirror source: `tests/core/`, `tests/channels/`, `tests/llm/`, `tests/git/`
+- `app` fixture (temp dirs), `runner_factory` for Runner+TestChannel
+- Git tests use `git_repo` fixture
+- Each test owns setup
+- FastAPI tests use `TestClient`, temp agents files
 - `uv run -m pytest tests/ -v`
 
-## Handlers (handlers.py)
-- Organise as: **steps first**, then **shared constants**, then **workflows**
-- Constants (e.g. step lists) only when shared between multiple workflows; inline otherwise
+## Handlers
+Organize: steps, shared constants, workflows. Constants only when shared.
+
+## Worktree discipline
+Always edit files relative to the current working directory. Never follow IDE file paths outside the worktree.
 
 ## Dev
 `just` = lint+typecheck+test. `uv sync` to install.

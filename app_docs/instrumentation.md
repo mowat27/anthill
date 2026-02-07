@@ -14,6 +14,7 @@ def my_step(runner: Runner, state: State) -> State:
 The `Runner` delegates to the `Channel`, which formats and outputs the message based on its implementation:
 
 - **CliChannel**: Writes to stdout with format `[workflow_name, run_id] message`
+- **ApiChannel**: Writes to stdout with format `[workflow_name, run_id] message` (appears in server logs)
 - **TestChannel**: Appends to `progress_messages` list for verification
 
 ## Error Reporting
@@ -31,7 +32,7 @@ if "required_key" not in state:
     runner.fail("Missing required_key in state")
 ```
 
-`fail()` prints to stderr and exits with code 1.
+`fail()` raises `WorkflowFailedError` with the message. The CLI catches this exception, prints to stderr, and exits with code 1. API channels log the error and allow the server to continue.
 
 ## Run Identification
 

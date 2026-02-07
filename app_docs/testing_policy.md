@@ -47,7 +47,7 @@ If two tests traverse the same core path with different data, they're the same t
 Focus on:
 - Single handler execution
 - Multi-step workflow composition via `run_workflow()`
-- Error propagation (SystemExit)
+- Error propagation (WorkflowFailedError)
 - Handler resolution (unknown workflow names)
 
 Avoid testing:
@@ -96,8 +96,27 @@ CLI tests are split into two categories:
 - Use `monkeypatch.setattr("sys.argv", ...)` to simulate CLI invocation
 - Use `capsys` to capture stdout/stderr
 - Clean up temp files in `finally` blocks
+- Test error handling: CLI catches `WorkflowFailedError`, prints to stderr, exits with code 1
 
 For file-based inputs (e.g., `--prompt-file`), integration tests should write known content to a temp file and verify it flows through to the handler state.
+
+### API Channel Testing Patterns
+
+API channel tests follow the same test double pattern as CLI channel:
+
+**ApiChannel unit tests** (`tests/channels/test_api_channel.py`):
+- Test channel type identifier
+- Test initial state handling (parametrized for None default)
+- Test progress output goes to stdout with correct format
+- Test error output goes to stderr using delegation pattern
+
+**Server endpoint tests** (`tests/test_server.py`):
+- Use FastAPI's `TestClient` from `httpx` package
+- Create fixture with temp agents file containing test handlers
+- Test successful workflow triggering returns run_id
+- Test unknown workflow names return 404
+- Test invalid request bodies return 422 validation errors
+- Each test cleans up temp files in fixture teardown
 
 ## Fixture Management
 

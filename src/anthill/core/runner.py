@@ -15,13 +15,12 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import uuid
 
 from datetime import datetime
 from typing import TYPE_CHECKING, NoReturn
 
-from anthill.core.domain import State, Channel
+from anthill.core.domain import State, Channel, WorkflowFailedError
 from anthill.core.app import App
 
 if TYPE_CHECKING:
@@ -140,14 +139,13 @@ class Runner:
         self.channel.report_error(self.id, message)
 
     def fail(self, message: str) -> NoReturn:
-        """Fail the workflow with an error message and exit.
+        """Fail the workflow by raising WorkflowFailedError.
 
         Args:
-            message: Error message to print to stderr before exiting.
+            message: Error message describing the failure.
 
         Raises:
-            SystemExit: Always exits with code 1.
+            WorkflowFailedError: Always raised to signal workflow failure.
         """
         self.logger.error(f"Workflow fatal error: {message}")
-        print(message, file=sys.stderr)
-        exit(1)
+        raise WorkflowFailedError(message)

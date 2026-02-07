@@ -36,7 +36,11 @@ class TestArgParsing:
     """Test suite for command-line argument parsing."""
 
     def _build_parser(self):
-        """Build and configure argument parser for testing CLI commands."""
+        """Build and configure argument parser for testing.
+
+        Returns:
+            argparse.ArgumentParser: Configured parser with run subcommand.
+        """
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers(dest="command")
         run_p = sub.add_parser("run")
@@ -220,5 +224,38 @@ class TestCliIntegration:
             captured = capsys.readouterr()
             assert "prompt=hello world" in captured.out
             assert "model=opus" in captured.out
+        finally:
+            os.unlink(agents_path)
+
+    def test_run_command_catches_workflow_failed_error(self, monkeypatch, capsys):
+        """Test that CLI run catches WorkflowFailedError, prints to stderr, exits 1."""
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
+            from anthill.core.app import App
+            from anthill.core.domain import State
+
+            app = App(log_dir="{log_dir}")
+
+            @app.handler
+            def blow_up(runner, state: State) -> State:
+                runner.fail("something went wrong")
+                return state
+        """)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(agents_code)
+            f.flush()
+            agents_path = f.name
+
+        try:
+            monkeypatch.setattr("sys.argv", [
+                "anthill", "run",
+                "--agents-file", agents_path,
+                "blow_up",
+            ])
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "something went wrong" in captured.err
         finally:
             os.unlink(agents_path)
