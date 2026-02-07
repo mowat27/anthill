@@ -1,7 +1,7 @@
 ---
 description: Generates a spec for a change
 model: Opus
-argument-hint: [feature-type] [descrtiptive-slug]
+argument-hint: [feature-type] [descriptive-slug]
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(*), WebFetch, WebSearch
 ---
 
@@ -15,9 +15,11 @@ FEATURE_TYPE: $1
 SLUG: $2
 ARGUMENTS: $ARGUMENTS
 
-* Derive FEATURE_TYPE from $ARGUMENTS if $1 is not an obvious feature type - e.g. `feature`, `chore`, `refactor`, `bugfix` etc
-* Derive SLUG from $ARGUMENTS if $1 is not an obvious slug type - e.g. `add-slack`, `improve-test-coverage` etc
+* Derive FEATURE_TYPE from $ARGUMENTS if, and only if,  $1 is not an obvious feature type - e.g. `feature`, `chore`, `patch`, `refactor`, `bugfix` etc.
+* Derive SLUG from $ARGUMENTS if $2 is not an obvious slug type - e.g. `add-slack`, `improve-test-coverage` etc
 * SLUG must be all lowercase with `hyphens-for-spaces`
+
+IMPORTANT: it is essential that you never override the user's FEATURE_TYPE if one is provided becuase some feature types use the lightweight workflow below.
 
 ## Instructions
 
@@ -93,33 +95,46 @@ If `ARGUMENTS` contain "BREAKING CHANGE" or similar ("BREAKING_CHANGE", "breakin
 
 ## Workflow
 
-The overseer (you) coordinates the spec by spawning agents via **blocking Task calls** — not background teammates. This keeps each
-agent's research out of your context window while giving you simple sequential/parallel control.
+* IF the FEATURE_TYPE is `patch` or `chore` run the `lightweight-process`
+* ELSE run the `full-process`
 
-**Execution pipeline:**
+<full-process>
+  The overseer (you) coordinates the spec by spawning agents via **blocking Task calls** — not background teammates. This keeps each
+  agent's research out of your context window while giving you simple sequential/parallel control.
 
-1. Spawn a **Designer** agent (blocking Task, subagent_type: general-purpose). It researches the codebase, designs the solution, and returns a concise summary. Do NOT spawn it in the background.
-2. Once the Designer returns, spawn these **in parallel** as blocking Task calls:
-    - **Tester** (subagent_type: general-purpose) — designs test cases based on the Designer's output
-    - **Craig** (subagent_type: craig) — assesses the Designer's output for simplicity
-    - **Eduard** (subagent_type: eduard) — assesses the Designer's output for correctness and consistency
-3. Synthesize all inputs, resolve conflicts, and write the final spec file. Only you write the spec.
-4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `{FEATURE_TYPE}-{SLUG}.md`
+  **Execution pipeline:**
 
-**Rules for spawning agents:**
-- Pass the Designer's summary into each reviewer's prompt — do not make them re-read the codebase.
-- Instruct each agent to return a concise report (not raw file contents).
-- Do NOT create a team. Do NOT use run_in_background. Plain blocking Task calls are sufficient.
-- The `overseer` has a pivotal role in ensuring that the other agents stay on track and do not diverge.  As such it must ULTRA THINK and make sure that:
-  - The spec meets the goals of the change
-  - The spec conforms to the `Design Philosophy`
-  - The solution is simple and does not add any non-essential complexity
-  - The work of the other agents does not conflict - either logically or structurally - with one another
-  - Scope does not creep
-    - do not allow additional changes outside of the scope of this change to be included in the spec
-    - do not allow "just in case" or "useful for later" changes (pre-emptive abstraction etc)
-    - THINK HARD about whether an error should be handled or allowed to propogate up the handler.
-    - do not allow over zealous value and type checking
+  1. Spawn a **Designer** agent (blocking Task, subagent_type: general-purpose). It researches the codebase, designs the solution, and returns a concise summary. Do NOT spawn it in the background.
+  2. Once the Designer returns, spawn these **in parallel** as blocking Task calls:
+      - **Tester** (subagent_type: general-purpose) — designs test cases based on the Designer's output
+      - **Craig** (subagent_type: craig) — assesses the Designer's output for simplicity
+      - **Eduard** (subagent_type: eduard) — assesses the Designer's output for correctness and consistency
+  3. Synthesize all inputs, resolve conflicts, and write the final spec file. Only you write the spec.
+  4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `{FEATURE_TYPE}-{SLUG}.md`
+
+  **Rules for spawning agents:**
+  - Pass the Designer's summary into each reviewer's prompt — do not make them re-read the codebase.
+  - Instruct each agent to return a concise report (not raw file contents).
+  - Do NOT create a team. Do NOT use run_in_background. Plain blocking Task calls are sufficient.
+  - The `overseer` has a pivotal role in ensuring that the other agents stay on track and do not diverge.  As such it must ULTRA THINK and make sure that:
+    - The spec meets the goals of the change
+    - The spec conforms to the `Design Philosophy`
+    - The solution is simple and does not add any non-essential complexity
+    - The work of the other agents does not conflict - either logically or structurally - with one another
+    - Scope does not creep
+      - do not allow additional changes outside of the scope of this change to be included in the spec
+      - do not allow "just in case" or "useful for later" changes (pre-emptive abstraction etc)
+      - THINK HARD about whether an error should be handled or allowed to propogate up the handler.
+      - do not allow over zealous value and type checking
+</full-process>
+
+
+<lightweight-process>
+  1. Read all `Relevant Files`
+  2. Design the solution and tests
+  3. Ask the `design-expert` skill to validate your design.  Incorporate changes.  Repeat until there are no more issues
+  4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `patch-{SLUG}.md`
+</lightweight-process>
 
 ## Spec Format
 
@@ -177,5 +192,11 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Report
 
-Report the path to the spec file and a short (100 words max) summary of the approach chosen.
+Provide:
+
+* **IMPORTANT**: Location of plan file
+* Overview of design
+* Observations from agents and decisions made
+* Trade offs and assumptions made
+
 
