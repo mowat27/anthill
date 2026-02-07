@@ -35,7 +35,8 @@ def load_app(path: str):
         The app object from the loaded module.
 
     Raises:
-        FileNotFoundError: If the file cannot be found or the module spec cannot be created.
+        FileNotFoundError: If the file cannot be found or the module spec
+            cannot be created.
         AttributeError: If the loaded module does not have an 'app' attribute.
     """
     spec = importlib.util.spec_from_file_location("agents", path)
@@ -75,22 +76,34 @@ def main() -> None:
 
     Commands:
         run: Execute a workflow with the following options:
-            - --agents-file: Path to Python file containing the app (default: handlers.py)
-            - --initial-state: Key=value pairs for initial workflow state (repeatable)
-            - --prompt: User prompt to pass to the workflow (mutually exclusive with --prompt-file)
-            - --prompt-file: Path to file containing user prompt (mutually exclusive with --prompt)
-            - --model: Model identifier to use for LLM operations
-            - workflow_name: Name of the workflow to execute (positional)
+            --agents-file: Path to Python file containing the app
+                (default: handlers.py)
+            --initial-state: Key=value pairs for initial workflow state
+                (repeatable)
+            --prompt: User prompt to pass to the workflow
+                (mutually exclusive with --prompt-file)
+            --prompt-file: Path to file containing user prompt
+                (mutually exclusive with --prompt)
+            --model: Model identifier to use for LLM operations
+            workflow_name: Name of the workflow to execute (positional)
 
-    Exit Codes:
-        0: Success
-        1: Error (file not found, invalid arguments, workflow failure)
+        server: Start the FastAPI server with the following options:
+            --host: Host address to bind (default: 127.0.0.1)
+            --port: Port number to bind (default: 8000)
+            --reload: Enable auto-reload on code changes
+            --agents-file: Path to Python file containing the app
+                (default: handlers.py)
+
+    Raises:
+        SystemExit: Exit code 0 for success, 1 for errors (file not found,
+            invalid arguments, workflow failure).
 
     Examples:
         anthill run my_workflow
         anthill run --agents-file=my_handlers.py --prompt="Hello" my_workflow
         anthill run --prompt-file=prompt.md my_workflow
         anthill run --initial-state key1=val1 --initial-state key2=val2 my_workflow
+        anthill server --host 0.0.0.0 --port 8000
     """
     parser = argparse.ArgumentParser(prog="anthill")
     subparsers = parser.add_subparsers(dest="command")

@@ -12,3 +12,5 @@ wheels/
 tmp/
 .claude/settings.local.json
 agents/
+trees/
+.anthill/

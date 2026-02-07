@@ -26,7 +26,7 @@ class ClaudeCodeAgent:
 
         Args:
             model: Optional model identifier to pass to the Claude CLI
-                   via the --model flag.
+                via the --model flag.
         """
         self.model = model
         logger.debug(f"ClaudeCodeAgent initialized: model={self.model}")
@@ -46,7 +46,7 @@ class ClaudeCodeAgent:
 
         Raises:
             AgentExecutionError: If the claude binary is not found or if the
-                                subprocess exits with a non-zero status code.
+                subprocess exits with a non-zero status code.
         """
         cmd = ["claude", "-p", prompt]
         if self.model:

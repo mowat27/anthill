@@ -10,7 +10,12 @@ from typing import Any, Protocol
 
 
 class WorkflowFailedError(Exception):
-    """Raised by Runner.fail() to signal a workflow failure."""
+    """Raised by Runner.fail() to signal a workflow failure.
+
+    This exception is raised when a workflow encounters a fatal error that
+    should terminate execution. It is caught by channels to handle workflow
+    failures appropriately (e.g., CLI exits with status 1, API logs error).
+    """
 
 
 type State = dict[str, Any]

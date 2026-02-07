@@ -10,7 +10,11 @@ logger = logging.getLogger("anthill.git.worktrees")
 
 
 class WorktreeError(Exception):
-    """Raised when a git worktree operation fails."""
+    """Raised when a git worktree operation fails.
+
+    This exception is raised when git worktree commands (add, remove) fail
+    or when attempting to use a non-existent worktree.
+    """
 
 
 class Worktree:
@@ -20,17 +24,17 @@ class Worktree:
     worktrees. The path is always stored as an absolute path.
 
     Attributes:
-        base_dir: Absolute path to the directory containing worktrees.
-        name: Name of the worktree (used as subdirectory name).
-        path: Absolute path to the worktree (base_dir/name).
+        base_dir (str): Absolute path to the directory containing worktrees.
+        name (str): Name of the worktree (used as subdirectory name).
+        path (str): Absolute path to the worktree (base_dir/name).
     """
 
     def __init__(self, base_dir: str, name: str) -> None:
         """Initialize a Worktree instance.
 
         Args:
-            base_dir: Directory where the worktree will be created.
-            name: Name for the worktree subdirectory.
+            base_dir (str): Directory where the worktree will be created.
+            name (str): Name for the worktree subdirectory.
         """
         self.base_dir = os.path.realpath(base_dir)
         self.name = name
@@ -41,7 +45,7 @@ class Worktree:
         """Check if the worktree directory exists on disk.
 
         Returns:
-            True if the worktree path exists as a directory, False otherwise.
+            bool: True if the worktree path exists as a directory, False otherwise.
         """
         return os.path.isdir(self.path)
 
@@ -52,8 +56,8 @@ class Worktree:
         creates a new branch with that name for the worktree.
 
         Args:
-            branch: Optional name for a new branch to create. If None, uses
-                the current HEAD.
+            branch (str | None): Optional name for a new branch to create. If None,
+                uses the current HEAD.
 
         Raises:
             WorktreeError: If the git worktree add command fails.
@@ -98,14 +102,14 @@ def git_worktree(
     removes the worktree.
 
     Args:
-        worktree: The Worktree instance to enter.
-        create: If True, create the worktree before entering. Defaults to False.
-        branch: Optional branch name to create with the worktree. Only used
-            when create=True.
-        remove: If True, remove the worktree on exit. Defaults to False.
+        worktree (Worktree): The Worktree instance to enter.
+        create (bool): If True, create the worktree before entering. Defaults to False.
+        branch (str | None): Optional branch name to create with the worktree. Only
+            used when create=True.
+        remove (bool): If True, remove the worktree on exit. Defaults to False.
 
     Yields:
-        The worktree instance that was entered.
+        Worktree: The worktree instance that was entered.
 
     Raises:
         WorktreeError: If create=False and the worktree doesn't exist, or if

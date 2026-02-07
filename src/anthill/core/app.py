@@ -39,17 +39,20 @@ class App:
         handlers: Dictionary mapping handler names to their functions.
         log_dir: Directory path where Runner instances will write log files.
         worktree_dir: Directory path where git worktrees will be created.
+        state_dir: Directory path where Runner instances will write state files.
     """
-    def __init__(self, log_dir: str = "agents/logs/", worktree_dir: str = "trees/") -> None:
+    def __init__(self, log_dir: str = "agents/logs/", worktree_dir: str = "trees/", state_dir: str = ".anthill/state/") -> None:
         """Initialize a new App instance with an empty handler registry.
 
         Args:
             log_dir: Directory for log files. Defaults to "agents/logs/".
             worktree_dir: Directory for git worktrees. Defaults to "trees/".
+            state_dir: Directory for state files. Defaults to ".anthill/state/".
         """
         self.handlers = {}
         self.log_dir = log_dir
         self.worktree_dir = worktree_dir
+        self.state_dir = state_dir
 
     def handler(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         """Register a function as a workflow handler.
@@ -110,6 +113,7 @@ def run_workflow(runner: Runner, state: State, steps: list[Callable[[Runner, Sta
         step_name = getattr(step, "__name__", repr(step))
         runner.logger.info(f"Executing step: {step_name}")
         state = step(runner, state)
+        runner._persist_state(state)
         runner.logger.debug(f"Step completed: {step_name}, state keys: {list(state.keys())}")
     runner.logger.info("run_workflow completed")
     return state

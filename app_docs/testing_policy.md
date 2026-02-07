@@ -121,7 +121,7 @@ API channel tests follow the same test double pattern as CLI channel:
 ## Fixture Management
 
 All shared fixtures live in `tests/conftest.py`:
-- `app` - Returns `App(log_dir=tempfile.mkdtemp(), worktree_dir=tempfile.mkdtemp())` per test for log and worktree isolation
+- `app` - Returns `App(log_dir=tempfile.mkdtemp(), worktree_dir=tempfile.mkdtemp(), state_dir=tempfile.mkdtemp())` per test for log, worktree, and state isolation
 - `runner_factory` - Creates Runner + TestChannel pairs, accepts optional `app` parameter
 - `TestChannel` - In-memory channel double for capturing I/O
 
@@ -130,16 +130,26 @@ Git-specific fixtures live in `tests/git/conftest.py`:
 
 Keep fixture scope minimal. Prefer function-scoped fixtures to session-scoped unless there's a compelling performance reason.
 
-### Log and Worktree Isolation in Tests
+### Log, Worktree, and State Isolation in Tests
 
-The `app` fixture directs logs and worktrees to temp directories per test, preventing files from accumulating in the working directory. Tests that create Runners or use worktrees should use the `app` fixture:
+The `app` fixture directs logs, worktrees, and state files to temp directories per test, preventing files from accumulating in the working directory. Tests that create Runners should use the `app` fixture:
 
 ```python
 def test_something(app, runner_factory):
     runner, source = runner_factory(app, "workflow", {})
     # Log files go to app.log_dir (temp directory)
     # Worktrees go to app.worktree_dir (temp directory)
+    # State files go to app.state_dir (temp directory)
 ```
+
+### State Persistence Testing Patterns
+
+Tests for state persistence (`tests/core/test_state_persistence.py`) verify:
+- State directory creation
+- State file naming pattern matches log files (`{timestamp}-{run_id}.json`)
+- State file contains correct JSON keys (run_id, workflow_name, handler additions)
+- State persisted after each `run_workflow()` step
+- Handlers can read persisted state mid-workflow to verify persistence timing
 
 ### Git Worktree Testing Patterns
 
