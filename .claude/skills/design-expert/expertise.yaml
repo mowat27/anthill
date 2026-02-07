@@ -1,6 +1,6 @@
 # Anthill Framework - Design Expertise
 # Mental model for the anthill workflow engine
-# Last validated: 2026-02-06
+# Last validated: 2026-02-07
 
 overview:
   name: anthill
@@ -37,6 +37,17 @@ architecture:
         supplied. Channels are the seam where tests swap in doubles.
       modules:
         - cli.py
+
+    - name: llm
+      path: src/anthill/llm/
+      responsibility: >
+        LLM agent abstraction layer. Defines the Agent protocol for LLM
+        interactions and provides concrete implementations (ClaudeCodeAgent).
+        Handlers use agents to delegate prompts to external LLM tooling.
+      modules:
+        - __init__.py   # Agent protocol
+        - errors.py     # AgentExecutionError
+        - claude_code.py  # ClaudeCodeAgent (subprocess-based)
 
     - name: cli
       path: src/anthill/cli.py
@@ -103,6 +114,35 @@ core_objects:
       Sequential composition helper. Folds state through a list of handler
       callables. Used inside composite handlers to chain sub-steps.
 
+llm_types:
+  Agent:
+    file: src/anthill/llm/__init__.py
+    definition: Protocol
+    methods:
+      - "prompt(prompt: str) -> str"
+    notes: >
+      Structural protocol for LLM agents. Any object with a prompt() method
+      qualifies. This is the extension point for adding new LLM backends.
+
+  AgentExecutionError:
+    file: src/anthill/llm/errors.py
+    definition: "class AgentExecutionError(Exception)"
+    notes: >
+      Raised when an agent fails to execute a prompt (non-zero exit,
+      missing binary, etc.).
+
+  ClaudeCodeAgent:
+    file: src/anthill/llm/claude_code.py
+    satisfies: Agent protocol
+    construction: "ClaudeCodeAgent(model: str | None = None)"
+    behavior:
+      prompt: >
+        Runs `claude -p <prompt>` via subprocess. If model is set,
+        inserts `--model <model>` flag. Returns stdout on success.
+      errors:
+        - "Non-zero exit → AgentExecutionError with stderr"
+        - "Missing binary → AgentExecutionError('claude binary not found')"
+
 channel_implementations:
   CliChannel:
     file: src/anthill/channels/cli.py
@@ -121,13 +161,16 @@ cli_entry_point:
       args:
         - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
         - "--initial-state key=val (repeatable) — seed state pairs"
-        - "prompt (positional) — workflow name to invoke"
+        - "--prompt — user prompt string, stored as state['prompt']"
+        - "--model — model identifier, stored as state['model']"
+        - "workflow_name (positional) — workflow name to invoke"
       flow: >
         1. load_app() dynamically imports the agents file via importlib
         2. parse_state_pairs() splits key=val strings into dict
-        3. Builds CliChannel with workflow_name=prompt, initial_state=dict
-        4. Creates Runner(app, channel) and calls runner.run()
-        5. Prints result dict to stdout
+        3. Merges --prompt and --model into state dict if provided
+        4. Builds CliChannel with workflow_name, initial_state=dict
+        5. Creates Runner(app, channel) and calls runner.run()
+        6. Prints result dict to stdout
       error_handling:
         - "FileNotFoundError → agents file not found"
         - "AttributeError → agents file has no 'app'"
@@ -143,10 +186,17 @@ data_flow:
     - "Handler(runner, state) → new State"
     - "For composites: run_workflow folds state through sub-handlers"
     - "Result state printed to stdout"
+  llm_path:
+    - "Handler extracts prompt and model from state"
+    - "Creates ClaudeCodeAgent(model=state.get('model'))"
+    - "Calls agent.prompt('/<command> <prompt>')"
+    - "Agent runs subprocess `claude -p` → stdout returned"
+    - "Handler spreads state + {result: response}"
   error_path:
     - "Unknown handler → ValueError from App.get_handler"
     - "Handler calls runner.fail(msg) → stderr + SystemExit(1)"
     - "Handler calls runner.report_error(msg) → channel.report_error → stderr"
+    - "Agent subprocess failure → AgentExecutionError propagates"
 
 testing_design:
   philosophy: >
@@ -166,6 +216,7 @@ testing_design:
     - tests/test_workflows.py — core engine paths (single, multi-step, failure, unknown)
     - tests/test_cli_channel.py — CliChannel initial_state and attribute tests
     - tests/test_cli.py — CLI arg parsing and integration (temp agents file)
+    - tests/test_claude_code_agent.py — ClaudeCodeAgent subprocess and error handling
 
 key_design_decisions:
   - >
@@ -182,3 +233,9 @@ key_design_decisions:
   - >
     The CLI dynamically loads user code via importlib. The agents file must
     export a module-level `app` object.
+  - >
+    Agent is a Protocol, like Channel. New LLM backends implement prompt(str)->str.
+    ClaudeCodeAgent delegates to the `claude` CLI via subprocess.
+  - >
+    CLI passes --prompt and --model into state dict. Handlers read these from
+    state, keeping the Runner/Channel layer unaware of LLM concerns.

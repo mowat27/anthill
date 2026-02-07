@@ -102,7 +102,7 @@ agent's research out of your context window while giving you simple sequential/p
     - **Craig** (subagent_type: craig) — assesses the Designer's output for simplicity
     - **Eduard** (subagent_type: eduard) — assesses the Designer's output for correctness and consistency
 3. Synthesize all inputs, resolve conflicts, and write the final spec file. Only you write the spec.
-4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `bugfix-{descriptive-slug}.md`
+4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `{FEATURE_TYPE}-{SLUG}.md`
 
 **Rules for spawning agents:**
 - Pass the Designer's summary into each reviewer's prompt — do not make them re-read the codebase.
