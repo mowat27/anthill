@@ -12,6 +12,7 @@ import argparse
 import importlib.util
 import logging
 import sys
+from pathlib import Path
 
 from anthill.channels.cli import CliChannel
 from anthill.core.runner import Runner
@@ -74,7 +75,8 @@ def main() -> None:
         run: Execute a workflow with the following options:
             - --agents-file: Path to Python file containing the app (default: handlers.py)
             - --initial-state: Key=value pairs for initial workflow state (repeatable)
-            - --prompt: User prompt to pass to the workflow
+            - --prompt: User prompt to pass to the workflow (mutually exclusive with --prompt-file)
+            - --prompt-file: Path to file containing user prompt (mutually exclusive with --prompt)
             - --model: Model identifier to use for LLM operations
             - workflow_name: Name of the workflow to execute (positional)
 
@@ -85,6 +87,7 @@ def main() -> None:
     Examples:
         anthill run my_workflow
         anthill run --agents-file=my_handlers.py --prompt="Hello" my_workflow
+        anthill run --prompt-file=prompt.md my_workflow
         anthill run --initial-state key1=val1 --initial-state key2=val2 my_workflow
     """
     parser = argparse.ArgumentParser(prog="anthill")
@@ -93,7 +96,9 @@ def main() -> None:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--agents-file", default="handlers.py")
     run_parser.add_argument("--initial-state", action="append", default=[])
-    run_parser.add_argument("--prompt", default=None)
+    prompt_group = run_parser.add_mutually_exclusive_group()
+    prompt_group.add_argument("--prompt", default=None)
+    prompt_group.add_argument("--prompt-file", default=None)
     run_parser.add_argument("--model", default=None)
     run_parser.add_argument("workflow_name")
 
@@ -122,6 +127,13 @@ def main() -> None:
         state = parse_state_pairs(args.initial_state)
         if args.prompt is not None:
             state["prompt"] = args.prompt
+        if args.prompt_file is not None:
+            try:
+                state["prompt"] = Path(args.prompt_file).read_text()
+            except FileNotFoundError:
+                logger.error(f"Prompt file not found: {args.prompt_file}")
+                print(f"Error: prompt file not found: {args.prompt_file}", file=sys.stderr)
+                sys.exit(1)
         if args.model is not None:
             state["model"] = args.model
         channel = CliChannel(workflow_name=args.workflow_name, initial_state=state)
