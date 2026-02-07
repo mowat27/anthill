@@ -10,17 +10,22 @@ overview:
     execute through a Runner. Designed for composable, testable pipelines.
     Supports CLI, HTTP API, and Slack-triggered execution.
   python: ">=3.12"
+  license: MIT
   build: uv (uv_build backend)
   entry_point: "antkeeper.cli:main"
   dependencies:
-    - ruff (lint)
-    - ty (type-check)
-    - fastapi (web framework)
-    - uvicorn[standard] (ASGI server)
-    - httpx (Slack API calls + FastAPI TestClient)
     - python-dotenv (.env file loading)
+  optional_dependencies:
+    server: ["fastapi", "uvicorn[standard]"]
+    slack: ["httpx"]
+    all: ["antkeeper[server,slack]"]
   dev_dependencies:
     - pytest (test)
+    - httpx (Slack API calls + FastAPI TestClient)
+    - fastapi (web framework)
+    - uvicorn[standard] (ASGI server)
+    - ruff (lint)
+    - ty (type-check)
   justfile_default: "check -> ruff, ty, test"
   justfile_recipes:
     - "sdlc prompt model='opus' — runs sdlc workflow, auto-detects --prompt vs --prompt-file"
@@ -90,6 +95,7 @@ architecture:
         Shared utility functions. Currently contains JSON extraction for
         parsing LLM responses that embed JSON in markdown or prose.
       modules:
+        - __init__.py  # Re-exports extract_json via __all__
         - json.py  # extract_json — finds first {…} in text, parses as JSON
 
     - name: http
@@ -120,6 +126,19 @@ architecture:
         routes inline (@api.post), and delegates logic to http/webhook.py
         (handle_webhook) and http/slack_events.py (SlackEventProcessor).
         Module-level app = create_app() for uvicorn import.
+
+    - name: package_init
+      path: src/antkeeper/__init__.py
+      responsibility: >
+        Package-level re-exports. Exports all major public types via __all__:
+        App, Runner, run_workflow, State, Channel, WorkflowFailedError,
+        CliChannel, ApiChannel, SlackChannel, Worktree, git_worktree.
+        Allows users to import from antkeeper directly.
+
+    - name: package_main
+      path: src/antkeeper/__main__.py
+      responsibility: >
+        Enables `python -m antkeeper` execution. Delegates to cli.main().
 
   logging: >
     File-based per-run logging via Python stdlib logging. Runner creates a
@@ -382,7 +401,7 @@ cli_entry_point:
         - "--reload (flag) — enable uvicorn auto-reload"
         - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
       flow: >
-        1. Sets ANTKEEPER_AGENTS_FILE environment variable to args.agents_file
+        1. Sets ANTKEEPER_HANDLERS_FILE environment variable to args.agents_file
         2. Calls uvicorn.run("antkeeper.server:app", host, port, reload)
         3. Uvicorn imports antkeeper.server module and loads the app object
       notes: >
@@ -399,7 +418,7 @@ server_module:
     FastAPI, defines routes inline, delegates logic to http/ package.
   functions:
     create_app:
-      signature: "create_app(agents_file: str = os.environ.get('ANTKEEPER_AGENTS_FILE', 'handlers.py')) -> FastAPI"
+      signature: "create_app(agents_file: str = os.environ.get('ANTKEEPER_HANDLERS_FILE', 'handlers.py')) -> FastAPI"
       responsibility: >
         1. dotenv.load_dotenv()
         2. load_app(agents_file) -> antkeeper App
@@ -427,7 +446,7 @@ http_modules:
   webhook:
     file: src/antkeeper/http/webhook.py
     types:
-      WebhookRequest: "pydantic.BaseModel — workflow_name: str, initial_state: dict = {}"
+      WebhookRequest: "pydantic.BaseModel — workflow_name: str, initial_state: dict[str, Any] = {}"
       WebhookResponse: "pydantic.BaseModel — run_id: str"
     function: "async handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, antkeeper_app: App) -> WebhookResponse"
     behavior: >
@@ -711,7 +730,7 @@ key_design_decisions:
     configured FastAPI instance. This makes testing possible — tests call
     create_app() with custom agents file. Module-level app = create_app()
     provides default instance for uvicorn to import. The --agents-file CLI
-    option is propagated via ANTKEEPER_AGENTS_FILE environment variable.
+    option is propagated via ANTKEEPER_HANDLERS_FILE environment variable.
   - >
     Server as thin orchestrator. server.py defines routes inline and
     delegates to http/ package: handle_webhook (webhook.py) and

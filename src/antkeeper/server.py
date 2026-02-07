@@ -1,6 +1,8 @@
 """FastAPI server for Antkeeper workflows.
 
-Defines all routes and delegates to library modules for implementation.
+This module defines the FastAPI application and HTTP endpoints for executing
+Antkeeper workflows via webhooks and processing Slack events. Routes are
+defined here and delegate to library modules for implementation.
 """
 import os
 
@@ -16,14 +18,15 @@ def create_app(agents_file: str = os.environ.get("ANTKEEPER_HANDLERS_FILE", "han
     """Create and configure a FastAPI application for Antkeeper workflows.
 
     Loads an Antkeeper app from the specified Python file and creates a FastAPI
-    server with /webhook and /slack_event endpoints.
+    server with /webhook and /slack_event endpoints. Environment variables are
+    loaded from .env file if present.
 
     Args:
         agents_file: Path to Python file containing the Antkeeper app.
             Defaults to ANTKEEPER_HANDLERS_FILE env var or "handlers.py".
 
     Returns:
-        Configured FastAPI application instance.
+        FastAPI: Configured FastAPI application instance with workflow routes.
     """
     dotenv.load_dotenv()
     antkeeper_app = load_app(agents_file)
@@ -39,7 +42,7 @@ def create_app(agents_file: str = os.environ.get("ANTKEEPER_HANDLERS_FILE", "han
             background_tasks: FastAPI background tasks for async execution.
 
         Returns:
-            WebhookResponse with unique run ID for the triggered workflow.
+            WebhookResponse: Response with unique run ID for the triggered workflow.
         """
         return await handle_webhook(request, background_tasks, antkeeper_app)
 
@@ -54,7 +57,7 @@ def create_app(agents_file: str = os.environ.get("ANTKEEPER_HANDLERS_FILE", "han
             request: FastAPI Request object containing Slack event JSON payload.
 
         Returns:
-            JSON response for Slack event processing (challenge response or acknowledgment).
+            dict: JSON response for Slack event processing (challenge response or acknowledgment).
         """
         body = await request.json()
         if body.get("type") != "url_verification":

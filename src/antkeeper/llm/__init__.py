@@ -22,6 +22,7 @@ class Agent(Protocol):
         >>> agent = MockAgent()
         >>> agent.prompt("test")
         'mock response'
+
     """
 
     def prompt(self, prompt: str) -> str:
@@ -35,5 +36,6 @@ class Agent(Protocol):
 
         Raises:
             AgentExecutionError: If the agent fails to execute the prompt.
+
         """
         ...

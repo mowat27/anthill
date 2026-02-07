@@ -32,7 +32,7 @@ def load_app(path: str):
         path: File path to the Python module containing the app.
 
     Returns:
-        The app object from the loaded module.
+        App: The app object from the loaded module.
 
     Raises:
         FileNotFoundError: If the file cannot be found or the module spec
@@ -54,7 +54,7 @@ def parse_state_pairs(pairs: list[str]) -> dict[str, str]:
         pairs: List of strings in "key=value" format.
 
     Returns:
-        Dictionary mapping keys to values.
+        dict[str, str]: Dictionary mapping keys to values.
 
     Raises:
         SystemExit: If any pair is not in "key=value" format.
@@ -72,7 +72,8 @@ def parse_state_pairs(pairs: list[str]) -> dict[str, str]:
 def main() -> None:
     """Main entry point for the Antkeeper CLI.
 
-    Parses command-line arguments and executes the requested workflow.
+    Parses command-line arguments and executes the requested workflow or starts
+    the server based on the subcommand.
 
     Commands:
         run: Execute a workflow with the following options:
