@@ -73,13 +73,15 @@ Tests mirror source layout:
 tests/
 ├── core/              # Tests for src/anthill/core/
 ├── channels/          # Tests for src/anthill/channels/
+│   └── test_slack_channel.py  # SlackChannel unit tests
 ├── helpers/           # Tests for src/anthill/helpers/
 ├── llm/               # Tests for src/anthill/llm/
 ├── git/               # Tests for src/anthill/git/
 │   ├── conftest.py    # git_repo fixture
 │   ├── test_worktree.py      # Worktree class tests
 │   └── test_context.py       # git_worktree context manager tests
-└── test_cli.py        # Tests for src/anthill/cli.py
+├── test_cli.py        # Tests for src/anthill/cli.py
+└── test_slack_server.py  # Tests for Slack event endpoint
 ```
 
 ### CLI Testing Patterns
@@ -117,6 +119,78 @@ API channel tests follow the same test double pattern as CLI channel:
 - Test unknown workflow names return 404
 - Test invalid request bodies return 422 validation errors
 - Each test cleans up temp files in fixture teardown
+
+### SlackChannel Testing Patterns
+
+SlackChannel tests (`tests/channels/test_slack_channel.py`) mock the HTTP transport layer:
+
+**Mock httpx.Client.post** - Patch `anthill.channels.slack.httpx.Client` to intercept Slack API calls without network I/O:
+
+```python
+@patch("anthill.channels.slack.httpx.Client")
+def test_report_progress_posts_to_slack_thread(self, mock_client_cls):
+    mock_client = MagicMock()
+    mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
+    mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    channel = SlackChannel("wf", slack_token="xoxb-test", channel_id="C123", thread_ts="1234.5678")
+    channel.report_progress("run1", "step done")
+
+    mock_client.post.assert_called_once_with(
+        "https://slack.com/api/chat.postMessage",
+        headers={"Authorization": "Bearer xoxb-test"},
+        json={"channel": "C123", "thread_ts": "1234.5678", "text": "[wf, run1] step done"},
+    )
+```
+
+**HTTP failure resilience** - Verify that `httpx.HTTPError` is caught and logged, not raised:
+
+```python
+@patch("anthill.channels.slack.httpx.Client")
+def test_report_progress_survives_http_failure(self, mock_client_cls):
+    mock_client = MagicMock()
+    mock_client.post.side_effect = httpx.HTTPError("connection failed")
+    mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
+    mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    channel = SlackChannel("wf", slack_token="xoxb-test", channel_id="C123", thread_ts="1234.5678")
+    channel.report_progress("run1", "step done")  # should not raise
+```
+
+Tests cover: channel type identifier, initial state handling (parametrized for None default), progress message format, error message `[ERROR]` prefix, and HTTP failure resilience.
+
+### Slack Server Testing Patterns
+
+Slack event endpoint tests (`tests/test_slack_server.py`) exercise the `/slack_event` POST route:
+
+**Mock slack_api** - Patch `anthill.http.slack_events.slack_api` with `AsyncMock` to intercept all Slack API calls (reactions, chat.postMessage) without network I/O:
+
+```python
+api_mock = AsyncMock(return_value={"ok": True})
+slack_api_patch = patch("anthill.http.slack_events.slack_api", api_mock)
+```
+
+**Environment variable patching** - Use `patch.dict(os.environ, {...})` to inject required Slack env vars (`SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, `SLACK_COOLDOWN_SECONDS`):
+
+```python
+env_patch = patch.dict(os.environ, {
+    "SLACK_BOT_TOKEN": "xoxb-test",
+    "SLACK_BOT_USER_ID": "U_BOT",
+    "SLACK_COOLDOWN_SECONDS": "0",
+})
+```
+
+**Deterministic timers** - Set `SLACK_COOLDOWN_SECONDS=0` to eliminate debounce delays. For tests that verify debounce behavior (deduplication, edits, replies), override to a large value (`9999`) so the timer never fires during the test:
+
+```python
+@patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "9999"})
+def test_duplicate_event_deduplication(self, slack_client):
+    ...
+```
+
+**Timer task completion** - For tests that verify timer-fired workflow dispatch, use `time.sleep(0.2)` after sending the event to allow the background asyncio timer task to complete before asserting on mock calls.
+
+Tests cover: URL verification challenge response, bot self-message filtering, mention acknowledgement (reaction), event deduplication, message edit updates, thread reply appending (with and without files), message deletion, timer-fired workflow dispatch, unknown workflow error posting, unknown event type handling, and orphan thread reply filtering.
 
 ## Fixture Management
 

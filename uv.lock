@@ -26,6 +26,8 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
+    { name = "python-dotenv" },
     { name = "ruff" },
     { name = "ty" },
     { name = "uvicorn", extra = ["standard"] },
@@ -40,6 +42,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
+    { name = "httpx" },
+    { name = "python-dotenv" },
     { name = "ruff" },
     { name = "ty" },
     { name = "uvicorn", extras = ["standard"] },

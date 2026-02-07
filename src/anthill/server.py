@@ -1,65 +1,22 @@
-"""FastAPI server for Anthill workflow webhooks.
+"""FastAPI server for Anthill workflows.
 
-This module provides a FastAPI server that exposes Anthill workflows via
-HTTP endpoints. Workflows are triggered asynchronously via POST requests
-to /webhook and run in the background.
+Defines all routes and delegates to library modules for implementation.
 """
 import os
-import sys
-from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
-from pydantic import BaseModel
+import dotenv
+from fastapi import BackgroundTasks, FastAPI, Request
 
-from anthill.channels.api import ApiChannel
 from anthill.cli import load_app
-from anthill.core.domain import WorkflowFailedError
-from anthill.core.runner import Runner
-
-
-class WebhookRequest(BaseModel):
-    """Request model for webhook endpoint.
-
-    Attributes:
-        workflow_name: Name of the workflow to execute.
-        initial_state: Initial state dictionary for the workflow. Defaults to empty dict.
-    """
-    workflow_name: str
-    initial_state: dict[str, Any] = {}
-
-
-class WebhookResponse(BaseModel):
-    """Response model for webhook endpoint.
-
-    Attributes:
-        run_id: Unique identifier for the workflow run.
-    """
-    run_id: str
-
-
-def _run_workflow(runner: Runner) -> None:
-    """Execute a workflow in the background, handling errors gracefully.
-
-    This function is designed to run as a background task. It catches
-    WorkflowFailedError silently (as it's expected) and logs unexpected
-    errors to stderr.
-
-    Args:
-        runner: The Runner instance to execute.
-    """
-    try:
-        runner.run()
-    except WorkflowFailedError:
-        pass
-    except Exception as e:
-        print(f"Unexpected error in workflow: {e}", file=sys.stderr)
+from anthill.http.webhook import WebhookRequest, WebhookResponse, handle_webhook
+from anthill.http.slack_events import SlackEventProcessor
 
 
 def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handlers.py")) -> FastAPI:
     """Create and configure a FastAPI application for Anthill workflows.
 
     Loads an Anthill app from the specified Python file and creates a FastAPI
-    server with a /webhook endpoint for triggering workflows asynchronously.
+    server with /webhook and /slack_event endpoints.
 
     Args:
         agents_file: Path to Python file containing the Anthill app.
@@ -68,38 +25,48 @@ def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handler
     Returns:
         Configured FastAPI application instance.
     """
+    dotenv.load_dotenv()
     anthill_app = load_app(agents_file)
     api = FastAPI()
+    slack = SlackEventProcessor(anthill_app)
 
     @api.post("/webhook", response_model=WebhookResponse)
-    async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks) -> WebhookResponse:
-        """Webhook endpoint for triggering workflows asynchronously.
-
-        Validates the workflow exists, creates a runner, and schedules the
-        workflow to run in the background. Returns immediately with a run_id
-        for tracking the execution.
+    async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks):
+        """Webhook endpoint for triggering Anthill workflows via HTTP POST.
 
         Args:
-            request: Webhook request containing workflow_name and initial_state.
-            background_tasks: FastAPI background tasks manager.
+            request: Webhook request with workflow name and initial state.
+            background_tasks: FastAPI background tasks for async execution.
 
         Returns:
-            WebhookResponse containing the unique run_id.
-
-        Raises:
-            HTTPException: 404 if the workflow_name is not found.
+            WebhookResponse with unique run ID for the triggered workflow.
         """
-        try:
-            anthill_app.get_handler(request.workflow_name)
-        except ValueError:
-            raise HTTPException(status_code=404, detail=f"Unknown workflow: {request.workflow_name}")
+        return await handle_webhook(request, background_tasks, anthill_app)
 
-        channel = ApiChannel(request.workflow_name, request.initial_state)
-        runner = Runner(anthill_app, channel)
-        background_tasks.add_task(_run_workflow, runner)
-        return WebhookResponse(run_id=runner.id)
+    @api.post("/slack_event")
+    async def slack_event(request: Request):
+        """Slack event endpoint for receiving and processing Slack events.
+
+        Receives Slack event payloads, handles URL verification challenges,
+        and dispatches message events to appropriate workflow handlers.
+
+        Args:
+            request: FastAPI Request object containing Slack event JSON payload.
+
+        Returns:
+            JSON response for Slack event processing (challenge response or acknowledgment).
+        """
+        body = await request.json()
+        return await slack.handle_event(body)
 
     return api
 
 
 app = create_app()
+"""FastAPI application instance configured with Anthill workflow routes.
+
+This is the ASGI application instance that should be passed to uvicorn or
+other ASGI servers. It is created by calling create_app() with default
+parameters (reading from ANTHILL_AGENTS_FILE environment variable or
+using "handlers.py" as the default agents file).
+"""

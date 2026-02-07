@@ -25,6 +25,12 @@ anthill run --prompt-file prompts/describe.md --model sonnet specify
 # Start an API server to trigger workflows via HTTP
 anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 
+# For Slack integration, create a .env file with:
+#   SLACK_BOT_TOKEN=xoxb-...
+#   SLACK_BOT_USER_ID=U...
+#   SLACK_COOLDOWN_SECONDS=5  (optional, default 5)
+#   ANTHILL_AGENTS_FILE=handlers.py  (optional)
+
 # Use just recipes for common workflows
 just sdlc "Add authentication" opus           # Standard SDLC workflow
 just sdlc_iso "Add dark mode" opus           # Isolated SDLC in git worktree
@@ -40,7 +46,8 @@ src/anthill/
 │   └── runner.py       # Runner execution engine
 ├── channels/
 │   ├── cli.py          # CLI channel adapter (stdout/stderr reporting)
-│   └── api.py          # API channel adapter (server logging)
+│   ├── api.py          # API channel adapter (server logging)
+│   └── slack.py        # Slack channel adapter (thread replies)
 ├── git/                # Git worktree integration
 │   └── worktrees.py    # Worktree class, git_worktree context manager
 ├── helpers/
@@ -49,8 +56,12 @@ src/anthill/
 │   ├── __init__.py     # Agent protocol
 │   ├── errors.py       # AgentExecutionError
 │   └── claude_code.py  # ClaudeCodeAgent (subprocess-based)
+├── http/               # HTTP server layer
+│   ├── __init__.py     # FastAPI app factory
+│   ├── webhook.py      # POST /webhook endpoint
+│   └── slack_events.py # POST /slack_event endpoint
 ├── cli.py              # Argparse-based CLI entry point
-└── server.py           # FastAPI webhook server
+└── server.py           # Server orchestrator (delegates to http/)
 ```
 
 ### Key Concepts
@@ -64,6 +75,7 @@ src/anthill/
 - **ClaudeCodeAgent** — Concrete `Agent` implementation. Delegates prompts to the `claude` CLI via subprocess. Accepts an optional `model` parameter.
 - **Worktree** — Git worktree wrapper. Provides `create()`, `remove()`, and `exists` for managing isolated git working directories. Paths are absolute for safety after cwd changes.
 - **git_worktree** — Context manager that enters a worktree, guarantees cwd restoration via try/finally, and optionally creates/removes the worktree.
+- **SlackChannel** — Channel implementation that posts workflow progress and results to Slack threads via the Slack API.
 
 ### Data Flow
 
@@ -84,6 +96,13 @@ src/anthill/
 4. Workflow runs in background task
 5. Progress/errors appear in server logs (stdout/stderr)
 6. If handler calls `runner.fail()`, server catches `WorkflowFailedError`, logs error, continues serving
+
+**Slack Execution:**
+1. User @mentions the bot in a Slack thread
+2. POST `/slack_event` receives the event, debounces rapid mentions (cooldown via `SLACK_COOLDOWN_SECONDS`)
+3. Server dispatches the workflow using `SlackChannel` bound to the originating thread
+4. Workflow progress and results are posted as thread replies
+5. Errors are reported back to the Slack thread
 
 ### Writing Handlers
 
@@ -116,6 +135,43 @@ def ask_llm(runner: Runner, state: State) -> State:
     agent = ClaudeCodeAgent(model=state.get("model"))
     response = agent.prompt(state["prompt"])
     return {**state, "result": response}
+```
+
+Handlers can compose steps using `run_workflow`, which folds state through a list of functions sequentially. Each step receives the state returned by the previous step, so steps communicate by adding keys to the state dict:
+
+```python
+from anthill.core.app import App, run_workflow
+from anthill.core.runner import Runner
+from anthill.core.domain import State
+
+app = App()
+
+@app.handler
+def fetch_data(runner: Runner, state: State) -> State:
+    runner.report_progress("fetching data")
+    return {**state, "raw_data": [1, 2, 3]}
+
+@app.handler
+def transform(runner: Runner, state: State) -> State:
+    doubled = [x * 2 for x in state["raw_data"]]
+    return {**state, "transformed": doubled}
+
+@app.handler
+def summarise(runner: Runner, state: State) -> State:
+    total = sum(state["transformed"])
+    return {**state, "summary": f"total={total}"}
+
+@app.handler
+def pipeline(runner: Runner, state: State) -> State:
+    return run_workflow(runner, state, [fetch_data, transform, summarise])
+```
+
+`fetch_data` writes `raw_data`, `transform` reads it and writes `transformed`, and `summarise` reads that. State is persisted after each step, so a failure mid-pipeline preserves the progress so far.
+
+Registering the individual steps with `@app.handler` is optional, but doing so allows them to be run individually from the CLI using `--initial-state` to supply the keys they expect:
+
+```bash
+anthill run --agents-file handlers.py --initial-state raw_data='[1, 2, 3]' transform
 ```
 
 Handlers can isolate work in git worktrees:
@@ -176,6 +232,7 @@ Logs do not appear in stdout/stderr (propagation disabled).
 - `--port <port>` - Port number (default: `8000`)
 - `--reload` - Enable auto-reload on code changes
 - `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)
+- For Slack integration, set env vars `SLACK_BOT_TOKEN` and `SLACK_BOT_USER_ID` (via `.env` or environment)
 
 **API Usage:**
 ```bash
@@ -188,6 +245,7 @@ curl -X POST http://localhost:8000/webhook \
 The justfile provides convenient recipes:
 - `just sdlc "prompt" opus` - Run standard SDLC workflow, auto-detects if prompt is a file path
 - `just sdlc_iso "prompt" opus` - Run isolated SDLC workflow in a git worktree
+- `just server` - Start the API/Slack server
 
 ## Development
 
@@ -218,7 +276,13 @@ Start with the **core layer** (`src/anthill/core/`):
 - `app.py` has the `App` registry and `run_workflow` composition helper
 - `runner.py` ties `App` + `Channel` together and drives execution
 
-The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` writes to stdout/stderr for terminal usage. `ApiChannel` writes to stdout/stderr for server logs. Add new channels here for other I/O patterns (message queue, database, etc.).
+The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` writes to stdout/stderr for terminal usage. `ApiChannel` writes to stdout/stderr for server logs. `SlackChannel` posts progress and results to Slack threads. Add new channels here for other I/O patterns.
+
+The **http layer** (`src/anthill/http/`) contains HTTP endpoint logic:
+- `__init__.py` exports `run_workflow_background()` (shared background task execution)
+- `webhook.py` exports `handle_webhook()` (POST `/webhook` implementation)
+- `slack_events.py` exports `SlackEventProcessor` class (POST `/slack_event` implementation with debounce state)
+- `server.py` in the root defines routes with `@api.post()` decorators and delegates to these modules
 
 The **llm layer** (`src/anthill/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
 
@@ -228,4 +292,10 @@ The **CLI** (`src/anthill/cli.py`) is the entry point. It loads user-defined han
 
 ### Framework Documentation
 
-For framework development policies (testing strategy, instrumentation patterns), see `app_docs/`. For a concise reference card, see `CLAUDE.md`.
+For detailed framework development documentation, see `app_docs/`:
+- `app_docs/testing_policy.md` - Testing approach, fixture management, patterns
+- `app_docs/instrumentation.md` - Logging, state persistence, error handling
+- `app_docs/http_server.md` - HTTP server architecture and endpoint design
+- `app_docs/slack.md` - Slack integration details and runtime behavior
+
+For a concise reference card, see `CLAUDE.md`.

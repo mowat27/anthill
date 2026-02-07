@@ -15,6 +15,9 @@ class WorkflowFailedError(Exception):
     This exception is raised when a workflow encounters a fatal error that
     should terminate execution. It is caught by channels to handle workflow
     failures appropriately (e.g., CLI exits with status 1, API logs error).
+
+    Attributes:
+        message: The error message describing the failure.
     """
 
 

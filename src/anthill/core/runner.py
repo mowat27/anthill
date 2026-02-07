@@ -118,7 +118,7 @@ class Runner:
         """Get the workflow name from the channel.
 
         Returns:
-            The workflow name string.
+            str: The workflow name string.
         """
         return self.channel.workflow_name
 
@@ -127,7 +127,7 @@ class Runner:
         """Get the workflow handler from the app.
 
         Returns:
-            The workflow handler callable.
+            Callable: The workflow handler callable that accepts a Runner and State.
         """
         return self.app.get_handler(self.workflow_name)
 
@@ -147,6 +147,8 @@ class Runner:
     def report_progress(self, message: str) -> None:
         """Report progress through the channel.
 
+        Logs the progress message and delegates to the channel's report_progress method.
+
         Args:
             message: Progress message to report.
         """
@@ -155,6 +157,8 @@ class Runner:
 
     def report_error(self, message: str) -> None:
         """Report an error through the channel.
+
+        Logs the error message and delegates to the channel's report_error method.
 
         Args:
             message: Error message to report.
