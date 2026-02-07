@@ -31,6 +31,22 @@ class WebhookResponse(BaseModel):
 
 
 async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, anthill_app: App) -> WebhookResponse:
+    """Handle incoming webhook requests to trigger Anthill workflows.
+
+    Validates the workflow exists, creates a Runner with an ApiChannel, and
+    schedules the workflow execution in the background.
+
+    Args:
+        request: Webhook request containing workflow name and initial state.
+        background_tasks: FastAPI background tasks manager for async execution.
+        anthill_app: The Anthill application instance with registered handlers.
+
+    Returns:
+        WebhookResponse containing the unique run ID for tracking the workflow.
+
+    Raises:
+        HTTPException: 404 error if the specified workflow name is not registered.
+    """
     try:
         anthill_app.get_handler(request.workflow_name)
     except ValueError:

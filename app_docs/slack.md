@@ -51,7 +51,7 @@ SLACK_COOLDOWN_SECONDS=30
 ## Runtime Behaviour Flow
 
 1. **User @mentions the bot** in a channel message, e.g. `@AntBot review fix the login bug`.
-2. The `/slack_event` endpoint receives the event from Slack.
+2. The `/slack_event` endpoint receives the event from Slack and delegates to `SlackEventProcessor.handle_event()`.
 3. **Bot self-filter**: if the event has a `bot_id` field, it is ignored (prevents the bot from responding to its own messages).
 4. **Thumbsup reaction**: the bot adds a thumbsup reaction to the message to acknowledge receipt.
 5. **Cooldown timer starts**: a debounce timer of `SLACK_COOLDOWN_SECONDS` begins.
@@ -60,7 +60,7 @@ SLACK_COOLDOWN_SECONDS=30
    - The bot posts "Processing your request..." in the thread.
    - The workflow name is looked up in the App's handler registry.
    - A `SlackChannel` and `Runner` are created.
-   - The workflow executes via `asyncio.to_thread(_run_workflow, runner)`.
+   - The workflow executes via `asyncio.to_thread(run_workflow_background, runner)`.
 8. **Workflow results** are posted back to the same thread via the `SlackChannel`.
 
 ## Workflow Name Extraction
@@ -96,6 +96,15 @@ Thread replies and message edits are checked before bot mentions. This ensures t
 
 The debounce system prevents premature dispatch when users are still composing their request across multiple messages or edits.
 
+### SlackEventProcessor
+
+The `SlackEventProcessor` class (in `slack_events.py`) encapsulates all Slack event handling logic and manages the pending message store as explicit instance state (`self._pending`). This replaced the previous closure-based design where the pending dict was hidden inside `setup_slack_routes()`.
+
+Benefits:
+- **Testable state**: `_pending` is accessible for inspection in tests
+- **Clear ownership**: State belongs to the processor instance, not a closure
+- **Focused methods**: Event handling split into `_handle_mention()`, `_handle_edit()`, `_handle_thread_reply()`, `_handle_delete()`, and `_on_timer_fire()`
+
 ### PendingMessage
 
 Each tracked message is stored as a `PendingMessage` dataclass:
@@ -110,7 +119,7 @@ Each tracked message is stored as a `PendingMessage` dataclass:
 | `workflow_name` | `str` | Extracted workflow name (first word after stripping @mention). |
 | `timer_task` | `asyncio.Task or None` | The active cooldown timer task. |
 
-Pending messages are keyed by `(channel_id, ts)` in an in-memory dictionary.
+Pending messages are keyed by `(channel_id, ts)` in the `SlackEventProcessor._pending` dictionary.
 
 ### Timer Reset Behaviour
 

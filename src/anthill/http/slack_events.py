@@ -102,11 +102,40 @@ async def slack_api(token: str, method: str, payload: dict) -> dict:
 
 
 class SlackEventProcessor:
+    """Process Slack Events API payloads with debounce and workflow dispatch.
+
+    This processor receives Slack events, accumulates message edits and thread
+    replies within a cooldown period, then dispatches the final accumulated
+    message to the appropriate workflow handler.
+
+    Attributes:
+        _app: Anthill App instance containing registered workflow handlers.
+        _pending: Dictionary mapping (channel_id, ts) tuples to pending messages
+            awaiting debounce timer expiration.
+    """
+
     def __init__(self, anthill_app: App) -> None:
+        """Initialize the Slack event processor.
+
+        Args:
+            anthill_app: Anthill App instance with registered workflow handlers.
+        """
         self._app = anthill_app
         self._pending: dict[tuple[str, str], PendingMessage] = {}
 
     async def handle_event(self, body: dict) -> dict:
+        """Route Slack event to appropriate handler based on event type.
+
+        Handles URL verification, bot message filtering, and dispatches to
+        specialized handlers for thread replies, edits, deletes, and mentions.
+
+        Args:
+            body: Slack Events API request body containing the event payload.
+
+        Returns:
+            Dictionary response for Slack API. Contains {"ok": True} for success,
+            or {"challenge": "..."} for URL verification.
+        """
         if body.get("type") == "url_verification":
             return {"challenge": body["challenge"]}
 
@@ -141,6 +170,22 @@ class SlackEventProcessor:
         return {"ok": True}
 
     async def _handle_thread_reply(self, event: dict, channel_id: str, event_ts: str, token: str, cooldown: float) -> dict:
+        """Handle a reply posted to an existing thread.
+
+        If a pending message exists for the parent thread, accumulates the
+        reply text and files, cancels the existing timer, and starts a new
+        debounce timer.
+
+        Args:
+            event: Slack event dictionary containing the thread reply.
+            channel_id: Slack channel ID where the reply was posted.
+            event_ts: Slack timestamp of the reply message.
+            token: Slack bot token for API calls.
+            cooldown: Debounce cooldown period in seconds.
+
+        Returns:
+            Dictionary response {"ok": True}.
+        """
         key = (channel_id, event["thread_ts"])
         if key in self._pending:
             entry = self._pending[key]
@@ -159,6 +204,21 @@ class SlackEventProcessor:
         return {"ok": True}
 
     async def _handle_edit(self, event: dict, channel_id: str, token: str, cooldown: float) -> dict:
+        """Handle an edit to an existing message.
+
+        If a pending message exists for the edited message, updates the
+        accumulated text, cancels the existing timer, and starts a new
+        debounce timer.
+
+        Args:
+            event: Slack event dictionary containing the edit event.
+            channel_id: Slack channel ID where the message was edited.
+            token: Slack bot token for API calls.
+            cooldown: Debounce cooldown period in seconds.
+
+        Returns:
+            Dictionary response {"ok": True}.
+        """
         nested = event.get("message", {})
         key = (channel_id, nested.get("ts", ""))
         if key in self._pending:
@@ -172,6 +232,18 @@ class SlackEventProcessor:
         return {"ok": True}
 
     def _handle_delete(self, event: dict, channel_id: str) -> dict:
+        """Handle a message deletion event.
+
+        If a pending message exists for the deleted message, cancels the
+        timer and removes the entry from the pending messages dictionary.
+
+        Args:
+            event: Slack event dictionary containing the deletion event.
+            channel_id: Slack channel ID where the message was deleted.
+
+        Returns:
+            Dictionary response {"ok": True}.
+        """
         key = (channel_id, event.get("deleted_ts", ""))
         if key in self._pending:
             entry = self._pending[key]
@@ -181,6 +253,23 @@ class SlackEventProcessor:
         return {"ok": True}
 
     async def _handle_mention(self, event: dict, channel_id: str, event_ts: str, bot_user_id: str, token: str, cooldown: float) -> dict:
+        """Handle a bot mention or message in the channel.
+
+        When the bot is mentioned, extracts the workflow name from the first
+        word after the mention, creates a pending message entry, adds a
+        reaction, and starts the debounce timer.
+
+        Args:
+            event: Slack event dictionary containing the mention or message.
+            channel_id: Slack channel ID where the mention occurred.
+            event_ts: Slack timestamp of the mention message.
+            bot_user_id: Slack user ID of the bot.
+            token: Slack bot token for API calls.
+            cooldown: Debounce cooldown period in seconds.
+
+        Returns:
+            Dictionary response {"ok": True}.
+        """
         text = event.get("text", "")
         if is_bot_mention(text, bot_user_id):
             clean_text = strip_mention(text)
@@ -216,6 +305,17 @@ class SlackEventProcessor:
         return {"ok": True}
 
     async def _on_timer_fire(self, key: tuple[str, str], token: str, cooldown: float) -> None:
+        """Execute after debounce cooldown period expires.
+
+        Waits for the cooldown period, retrieves the accumulated pending
+        message, validates the workflow exists, then dispatches to the
+        workflow handler via a background thread.
+
+        Args:
+            key: Tuple of (channel_id, ts) identifying the pending message.
+            token: Slack bot token for API calls.
+            cooldown: Cooldown period in seconds to wait before processing.
+        """
         await asyncio.sleep(cooldown)
         entry = self._pending.pop(key, None)
         if entry is None:

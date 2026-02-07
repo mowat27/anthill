@@ -95,12 +95,14 @@ architecture:
     - name: http
       path: src/anthill/http/
       responsibility: >
-        HTTP endpoint modules. Route setup functions are called by server.py
-        during FastAPI app creation. Separates endpoint logic from server
-        orchestration for modularity and test isolation.
+        HTTP endpoint logic extracted from server.py. __init__.py provides
+        run_workflow_background shared helper. webhook.py exports handle_webhook
+        async function. slack_events.py exports SlackEventProcessor class.
+        server.py defines routes inline and delegates to these modules.
       modules:
-        - webhook.py       # setup_webhook_routes — POST /webhook extracted from server.py
-        - slack_events.py  # setup_slack_routes — POST /slack_event with debounce timer, pending store
+        - __init__.py      # run_workflow_background — shared background task helper
+        - webhook.py       # handle_webhook async function, WebhookRequest/Response models
+        - slack_events.py  # SlackEventProcessor class with debounce timer, pending store
 
     - name: cli
       path: src/anthill/cli.py
@@ -114,10 +116,10 @@ architecture:
       path: src/anthill/server.py
       responsibility: >
         FastAPI server orchestrator. Loads .env via python-dotenv, loads
-        anthill App from agents file, creates FastAPI instance, and delegates
-        route setup to http/webhook.py and http/slack_events.py. Owns
-        _run_workflow background task helper. Module-level app = create_app()
-        for uvicorn import.
+        anthill App from agents file, creates FastAPI instance, defines
+        routes inline (@api.post), and delegates logic to http/webhook.py
+        (handle_webhook) and http/slack_events.py (SlackEventProcessor).
+        Module-level app = create_app() for uvicorn import.
 
   logging: >
     File-based per-run logging via Python stdlib logging. Runner creates a
@@ -308,7 +310,7 @@ channel_implementations:
     behavior:
       type: '"cli"'
       initial_state: "Copies input dict or defaults to {}"
-      report_progress: "Prints formatted [workflow_name, run_id] message to stdout"
+      report_progress: "Prints formatted [workflow_name, run_id] message to stdout with flush=True"
       report_error: "Delegates to report_progress with file=sys.stderr"
 
   ApiChannel:
@@ -321,8 +323,8 @@ channel_implementations:
       report_progress: "Prints formatted [workflow_name, run_id] message to stdout with flush=True"
       report_error: "Delegates to report_progress with file=sys.stderr"
     notes: >
-      Identical to CliChannel except type="api" and flush=True on progress
-      prints. Designed for FastAPI server where output goes to Uvicorn logs.
+      Identical to CliChannel except type="api". Both use flush=True.
+      Designed for FastAPI server where output goes to Uvicorn logs.
 
   SlackChannel:
     file: src/anthill/channels/slack.py
@@ -394,35 +396,40 @@ server_module:
   file: src/anthill/server.py
   purpose: >
     FastAPI server orchestrator. Loads .env, loads anthill App, creates
-    FastAPI, delegates route setup to http/ package. Owns _run_workflow.
+    FastAPI, defines routes inline, delegates logic to http/ package.
   functions:
-    _run_workflow:
-      signature: "_run_workflow(runner: Runner) -> None"
-      responsibility: >
-        Background task wrapper. Catches WorkflowFailedError silently,
-        logs unexpected errors to stderr.
     create_app:
       signature: "create_app(agents_file: str = os.environ.get('ANTHILL_AGENTS_FILE', 'handlers.py')) -> FastAPI"
       responsibility: >
         1. dotenv.load_dotenv()
         2. load_app(agents_file) -> anthill App
-        3. Creates FastAPI, calls setup_webhook_routes + setup_slack_routes
-        4. Returns configured FastAPI
+        3. Creates FastAPI + SlackEventProcessor(anthill_app)
+        4. Defines @api.post("/webhook") -> delegates to handle_webhook
+        5. Defines @api.post("/slack_event") -> delegates to slack.handle_event
+        6. Returns configured FastAPI
   module_level:
     app: "app = create_app()  # Default instance for uvicorn to import"
 
 http_modules:
+  init:
+    file: src/anthill/http/__init__.py
+    function: "run_workflow_background(runner: Runner) -> None"
+    behavior: >
+      Shared background task helper. Catches WorkflowFailedError silently,
+      logs unexpected errors to stderr. Imported by webhook.py and
+      slack_events.py.
+
   webhook:
     file: src/anthill/http/webhook.py
     types:
       WebhookRequest: "pydantic.BaseModel — workflow_name: str, initial_state: dict = {}"
       WebhookResponse: "pydantic.BaseModel — run_id: str"
-    function: "setup_webhook_routes(api, anthill_app) -> None"
-    endpoint_POST_webhook:
-      behavior: >
-        Validates workflow via get_handler (404 if missing), creates
-        ApiChannel + Runner, schedules _run_workflow as background task,
-        returns run_id.
+    function: "async handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, anthill_app: App) -> WebhookResponse"
+    behavior: >
+      Validates workflow via get_handler (404 if missing), creates
+      ApiChannel + Runner, schedules run_workflow_background as background
+      task, returns WebhookResponse with run_id. Called from server.py
+      route handler.
 
   slack_events:
     file: src/anthill/http/slack_events.py
@@ -436,33 +443,44 @@ http_modules:
         fields: "channel_id, ts, user, text, files: list[dict], workflow_name, timer_task: asyncio.Task | None"
     async_helpers:
       slack_api: "async slack_api(token, method, payload) -> dict  # httpx.AsyncClient POST to Slack API"
-    function: "setup_slack_routes(api, anthill_app) -> None"
+    class: SlackEventProcessor
+    construction: "SlackEventProcessor(anthill_app: App)"
+    attributes:
+      - "_app: App  # anthill app with registered handlers"
+      - "_pending: dict[tuple[str, str], PendingMessage]  # instance-scoped pending store"
+    methods:
+      - "async handle_event(body: dict) -> dict  # main event router"
+      - "async _handle_thread_reply(event, channel_id, event_ts, token, cooldown) -> dict"
+      - "async _handle_edit(event, channel_id, token, cooldown) -> dict"
+      - "_handle_delete(event, channel_id) -> dict  # sync method"
+      - "async _handle_mention(event, channel_id, event_ts, bot_user_id, token, cooldown) -> dict"
+      - "async _on_timer_fire(key, token, cooldown) -> None  # debounce timer callback"
     env_vars:
       - "SLACK_BOT_TOKEN — Slack bot OAuth token"
       - "SLACK_BOT_USER_ID — Slack user ID for mention detection"
       - "SLACK_COOLDOWN_SECONDS — debounce timer seconds (default: 30)"
-    endpoint_POST_slack_event:
-      routing_order:
-        - "url_verification -> return challenge"
-        - "no event -> 200"
-        - "bot self-filter (bot_id) -> 200"
-        - "thread reply (thread_ts != ts, parent in pending) -> cancel timer, append text/files, restart timer, add reaction"
-        - "message_changed -> update pending text, restart timer"
-        - "message_deleted -> cancel timer, remove pending"
-        - "bot mention (app_mention or message with <@BOT>) -> create PendingMessage, add thumbsup reaction, start debounce timer"
-        - "all other -> 200"
+    routing_order:
+      - "url_verification -> return challenge"
+      - "no event -> 200"
+      - "bot self-filter (bot_id) -> 200"
+      - "thread reply (thread_ts != ts, parent in pending) -> cancel timer, append text/files, restart timer, add reaction"
+      - "message_changed -> update pending text, restart timer"
+      - "message_deleted -> cancel timer, remove pending"
+      - "bot mention (app_mention or message with <@BOT>) -> create PendingMessage, add thumbsup reaction, start debounce timer"
+      - "all other -> 200"
     debounce_timer:
-      function: "_on_timer_fire(key, token, cooldown) — closure inside setup_slack_routes"
       behavior: >
-        Sleeps for cooldown, pops entry from pending, posts "Processing..."
-        in thread, validates workflow exists (posts error if not), builds
-        initial_state {prompt, slack_user, files?}, creates SlackChannel +
-        Runner, runs via asyncio.to_thread(_run_workflow, runner).
+        _on_timer_fire: sleeps for cooldown, pops entry from pending,
+        posts "Processing..." in thread, validates workflow exists (posts
+        error if not), builds initial_state {prompt, slack_user, files?},
+        creates SlackChannel + Runner, runs via
+        asyncio.to_thread(run_workflow_background, runner).
     design_constraint: >
-      Pending store is closure-scoped for test isolation. Cooldown=0 in tests
-      for deterministic timers. No thread safety concerns — pending accessed
-      only from async handlers on single-threaded event loop. (channel_id, ts)
-      key naturally deduplicates app_mention + message events.
+      Pending store is instance-scoped on SlackEventProcessor for test
+      isolation. Cooldown=0 in tests for deterministic timers. No thread
+      safety concerns — pending accessed only from async handlers on
+      single-threaded event loop. (channel_id, ts) key naturally
+      deduplicates app_mention + message events.
 
 handlers_file:
   file: handlers.py
@@ -480,6 +498,11 @@ handlers_file:
     3. Workflows (# --- Workflows ---) — composite handlers that call
        run_workflow or orchestrate steps.
   steps:
+    healthcheck:
+      description: "Asks Claude to write a short poem; verifies the agent pipeline works"
+      state_in: ["model"]
+      state_out: ["poem"]
+
     specify:
       description: "Runs /specify, extracts spec_file and slug via extract_json"
       state_in: ["prompt", "model"]
@@ -542,7 +565,7 @@ data_flow:
     - "Server validates workflow exists via app.get_handler()"
     - "Creates ApiChannel(workflow_name, initial_state)"
     - "Creates Runner(app, channel) — generates run_id"
-    - "Schedules _run_workflow(runner) as FastAPI background task"
+    - "Schedules run_workflow_background(runner) as FastAPI background task"
     - "Returns {run_id} JSON response immediately (200)"
     - "Background task calls runner.run() -> workflow executes asynchronously"
     - "Progress/error output goes to Uvicorn logs (stdout/stderr)"
@@ -567,7 +590,7 @@ data_flow:
     - "Timer fires after cooldown — posts 'Processing...' in thread"
     - "Validates workflow exists, builds initial_state {prompt, slack_user, files?}"
     - "Creates SlackChannel(workflow_name, initial_state, token, channel_id, thread_ts)"
-    - "Creates Runner(app, channel), runs via asyncio.to_thread(_run_workflow)"
+    - "Creates Runner(app, channel), runs via asyncio.to_thread(run_workflow_background)"
     - "Handler calls runner.report_progress() -> SlackChannel posts to Slack thread"
   error_path:
     - "Unknown handler -> ValueError from App.get_handler"
@@ -683,15 +706,17 @@ key_design_decisions:
     provides default instance for uvicorn to import. The --agents-file CLI
     option is propagated via ANTHILL_AGENTS_FILE environment variable.
   - >
-    Server refactored to orchestrator. Endpoint logic extracted into
-    src/anthill/http/ package (webhook.py, slack_events.py). server.py
-    owns create_app() and _run_workflow(). Route modules call
-    setup_*_routes(api, anthill_app) during app creation.
+    Server as thin orchestrator. server.py defines routes inline and
+    delegates to http/ package: handle_webhook (webhook.py) and
+    SlackEventProcessor.handle_event (slack_events.py). Background
+    task helper run_workflow_background lives in http/__init__.py.
+    No setup_*_routes functions — server owns route definitions.
   - >
-    Slack integration uses debounce pattern. Bot mentions create a
-    PendingMessage with a cooldown timer. Edits and thread replies reset
-    the timer and accumulate text/files. Timer fire dispatches to the
-    workflow handler. This allows users to compose multi-part requests.
+    Slack integration uses debounce pattern via SlackEventProcessor class
+    (not closures). Bot mentions create a PendingMessage with a cooldown
+    timer. Edits and thread replies reset the timer and accumulate
+    text/files. Timer fire dispatches to the workflow handler. Pending
+    store is instance-scoped on the processor for test isolation.
   - >
     SlackChannel uses sync httpx (handlers run in threadpool). Server
     endpoint uses async httpx (event loop). Independent clients.

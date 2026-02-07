@@ -32,10 +32,30 @@ def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handler
 
     @api.post("/webhook", response_model=WebhookResponse)
     async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks):
+        """Webhook endpoint for triggering Anthill workflows via HTTP POST.
+
+        Args:
+            request: Webhook request with workflow name and initial state.
+            background_tasks: FastAPI background tasks for async execution.
+
+        Returns:
+            WebhookResponse with unique run ID for the triggered workflow.
+        """
         return await handle_webhook(request, background_tasks, anthill_app)
 
     @api.post("/slack_event")
     async def slack_event(request: Request):
+        """Slack event endpoint for receiving and processing Slack events.
+
+        Receives Slack event payloads, handles URL verification challenges,
+        and dispatches message events to appropriate workflow handlers.
+
+        Args:
+            request: FastAPI Request object containing Slack event JSON payload.
+
+        Returns:
+            JSON response for Slack event processing (challenge response or acknowledgment).
+        """
         body = await request.json()
         return await slack.handle_event(body)
 

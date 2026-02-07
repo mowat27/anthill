@@ -4,15 +4,15 @@ The Anthill HTTP server exposes workflows over HTTP using FastAPI. It accepts in
 
 ## Architecture
 
-The server is split into an orchestrator module and an `http/` package containing individual endpoint modules:
+The server follows the standard FastAPI pattern: `server.py` defines routes with `@api.post()` decorators and delegates implementation to library functions in the `http/` package:
 
 ```
 src/anthill/
-    server.py              # Orchestrator: create_app(), _run_workflow(), module-level `app`
+    server.py              # Entry point: create_app(), route definitions, module-level `app`
     http/
-        __init__.py
-        webhook.py         # POST /webhook endpoint
-        slack_events.py    # POST /slack_event endpoint (see app_docs/slack.md)
+        __init__.py        # Shared utilities: run_workflow_background()
+        webhook.py         # Webhook logic: handle_webhook()
+        slack_events.py    # Slack logic: SlackEventProcessor class
 ```
 
 `server.py` is responsible for:
@@ -20,10 +20,10 @@ src/anthill/
 1. Loading environment variables from `.env` via `python-dotenv`.
 2. Loading the Anthill `App` from a Python file using `load_app()`.
 3. Creating the `FastAPI` instance.
-4. Delegating route registration to `setup_webhook_routes()` and `setup_slack_routes()`.
-5. Providing the shared `_run_workflow()` helper used by both endpoint modules.
+4. Defining all routes (`POST /webhook`, `POST /slack_event`) directly with `@api.post()` decorators.
+5. Delegating each route's implementation to library functions in one line.
 
-Each endpoint module exposes a `setup_*_routes(api, anthill_app)` function that registers its routes on the FastAPI instance. This keeps endpoint logic self-contained while the orchestrator controls composition.
+Each endpoint module in `http/` exports plain functions or classes that handle the route logic. This eliminates circular dependencies and makes route definitions visible at a glance in `server.py`.
 
 ## Factory Pattern
 
@@ -37,11 +37,28 @@ def create_app(
 
 1. Calls `dotenv.load_dotenv()` to load `.env` into the process environment.
 2. Calls `load_app(agents_file)` to dynamically import the Python file and extract its `app` attribute (an `anthill.core.app.App` instance).
-3. Creates a `FastAPI()` instance.
-4. Calls `setup_webhook_routes(api, anthill_app)` and `setup_slack_routes(api, anthill_app)`.
+3. Creates a `FastAPI()` instance and a `SlackEventProcessor(anthill_app)` instance.
+4. Defines routes directly with `@api.post()` decorators inside `create_app()`, delegating to `handle_webhook()` and `slack.handle_event()`.
 5. Returns the configured `FastAPI` instance.
 
 A module-level `app = create_app()` is defined so that uvicorn can reference `anthill.server:app` directly.
+
+### Route Definition Pattern
+
+Routes are defined inline with decorator syntax:
+
+```python
+@api.post("/webhook", response_model=WebhookResponse)
+async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks):
+    return await handle_webhook(request, background_tasks, anthill_app)
+
+@api.post("/slack_event")
+async def slack_event(request: Request):
+    body = await request.json()
+    return await slack.handle_event(body)
+```
+
+This makes all endpoints visible at the top level of `server.py`, matching the standard FastAPI pattern from the official docs.
 
 ## Environment Variables
 
@@ -91,18 +108,20 @@ Defined as `WebhookResponse(BaseModel)` in `src/anthill/http/webhook.py`.
 
 ### Execution Flow
 
-1. Validate `workflow_name` exists via `anthill_app.get_handler()`. Return 404 if not found.
+The route delegates to `handle_webhook()` in `webhook.py`:
+
+1. Validate `workflow_name` exists via `anthill_app.get_handler()`. Raise 404 HTTPException if not found.
 2. Create an `ApiChannel` with the workflow name and initial state.
 3. Create a `Runner` with the App and channel.
-4. Add `_run_workflow(runner)` as a FastAPI background task.
+4. Add `run_workflow_background(runner)` as a FastAPI background task.
 5. Return the `run_id` immediately (HTTP 200).
 
 ## Background Task Pattern
 
-Both `/webhook` and `/slack_event` use the shared `_run_workflow()` function to execute workflows:
+Both `/webhook` and `/slack_event` use the shared `run_workflow_background()` function from `http/__init__.py` to execute workflows:
 
 ```python
-def _run_workflow(runner: Runner) -> None:
+def run_workflow_background(runner: Runner) -> None:
     try:
         runner.run()
     except WorkflowFailedError:
@@ -116,7 +135,11 @@ Key behaviours:
 - `WorkflowFailedError` is caught silently. This is an expected outcome when a workflow step signals failure.
 - Any other exception is printed to stderr but does not propagate. This prevents background task crashes from affecting the HTTP server.
 - For `/webhook`, the task is added via FastAPI's `BackgroundTasks` mechanism (runs in the same process after the response is sent).
-- For `/slack_event`, the task is run via `asyncio.to_thread(_run_workflow, runner)` inside an async timer callback, keeping the event loop unblocked.
+- For `/slack_event`, the task is run via `asyncio.to_thread(run_workflow_background, runner)` inside an async timer callback, keeping the event loop unblocked.
+
+### Why http/__init__.py?
+
+Moving `run_workflow_background()` from `server.py` to `http/__init__.py` breaks the circular import that existed when `http/` modules imported back to `server.py`. Now `http/` modules import from their own package, and `server.py` imports from `http/` — a clean one-way dependency.
 
 ## Starting the Server
 

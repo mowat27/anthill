@@ -278,7 +278,11 @@ Start with the **core layer** (`src/anthill/core/`):
 
 The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` writes to stdout/stderr for terminal usage. `ApiChannel` writes to stdout/stderr for server logs. `SlackChannel` posts progress and results to Slack threads. Add new channels here for other I/O patterns.
 
-The **http layer** (`src/anthill/http/`) contains the FastAPI endpoint modules. `__init__.py` provides the app factory. `webhook.py` handles POST `/webhook` for programmatic triggers. `slack_events.py` handles POST `/slack_event` for Slack @mention events with debounce logic. `server.py` in the root delegates to this package.
+The **http layer** (`src/anthill/http/`) contains HTTP endpoint logic:
+- `__init__.py` exports `run_workflow_background()` (shared background task execution)
+- `webhook.py` exports `handle_webhook()` (POST `/webhook` implementation)
+- `slack_events.py` exports `SlackEventProcessor` class (POST `/slack_event` implementation with debounce state)
+- `server.py` in the root defines routes with `@api.post()` decorators and delegates to these modules
 
 The **llm layer** (`src/anthill/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
 
@@ -288,4 +292,10 @@ The **CLI** (`src/anthill/cli.py`) is the entry point. It loads user-defined han
 
 ### Framework Documentation
 
-For framework development policies (testing strategy, instrumentation patterns), see `app_docs/`. For a concise reference card, see `CLAUDE.md`.
+For detailed framework development documentation, see `app_docs/`:
+- `app_docs/testing_policy.md` - Testing approach, fixture management, patterns
+- `app_docs/instrumentation.md` - Logging, state persistence, error handling
+- `app_docs/http_server.md` - HTTP server architecture and endpoint design
+- `app_docs/slack.md` - Slack integration details and runtime behavior
+
+For a concise reference card, see `CLAUDE.md`.
