@@ -1,6 +1,6 @@
 # patch: Add --prompt-file option to CLI run command
 
-- Add `--prompt-file` flag to `anthill run`, mutually exclusive with `--prompt`
+- Add `--prompt-file` flag to `antkeeper run`, mutually exclusive with `--prompt`
 - Load file contents and inject into state as `prompt`, identical to `--prompt`
 - Fail with clear error if file not found or both flags provided
 
@@ -12,24 +12,24 @@ The CLI `run` command gains a new `--prompt-file <path>` option. It is mutually 
 
 ```bash
 # Existing (unchanged)
-anthill run --prompt "describe this project" --model sonnet specify
+antkeeper run --prompt "describe this project" --model sonnet specify
 
 # New
-anthill run --prompt-file prompts/describe.md --model sonnet specify
+antkeeper run --prompt-file prompts/describe.md --model sonnet specify
 ```
 
 Both channels (CLI and any future channels) are unaffected — the file is resolved in `cli.py` before the state reaches `CliChannel`.
 
 ## Relevant Files
 
-- `src/anthill/cli.py` — CLI entry point where `--prompt` is currently parsed and injected into state. Add `--prompt-file` here with mutual exclusion and file loading.
+- `src/antkeeper/cli.py` — CLI entry point where `--prompt` is currently parsed and injected into state. Add `--prompt-file` here with mutual exclusion and file loading.
 - `tests/test_cli.py` — CLI tests. Add argument parsing tests and integration tests for `--prompt-file`.
 
 ## Workflow
 
 ### Step 1: Add mutually exclusive group and file loading to CLI
 
-- In `src/anthill/cli.py`, replace the standalone `--prompt` argument with an `argparse` mutually exclusive group containing `--prompt` and `--prompt-file`.
+- In `src/antkeeper/cli.py`, replace the standalone `--prompt` argument with an `argparse` mutually exclusive group containing `--prompt` and `--prompt-file`.
 - After argument parsing, in the `run` command block, add logic: if `args.prompt_file` is not `None`, read the file with `pathlib.Path(args.prompt_file).read_text()` and assign the contents to `state["prompt"]`. Let `FileNotFoundError` and other OS errors propagate naturally (consistent with how `load_app` handles missing files — print to stderr, exit 1).
 - The existing `if args.prompt is not None: state["prompt"] = args.prompt` line remains unchanged; only one of the two can be set due to the mutually exclusive group.
 
@@ -68,8 +68,8 @@ Both channels (CLI and any future channels) are unaffected — the file is resol
 
 ## Acceptance Criteria
 
-- `anthill run --prompt-file <path> <workflow>` reads the file and injects contents as `state["prompt"]`
-- `anthill run --prompt "x" --prompt-file "y" <workflow>` is rejected by argparse
+- `antkeeper run --prompt-file <path> <workflow>` reads the file and injects contents as `state["prompt"]`
+- `antkeeper run --prompt "x" --prompt-file "y" <workflow>` is rejected by argparse
 - Missing file prints error to stderr and exits 1
 - All existing tests continue to pass
 - New tests cover parsing, mutual exclusion, file loading, and file-not-found

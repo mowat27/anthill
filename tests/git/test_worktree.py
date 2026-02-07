@@ -13,7 +13,7 @@ import subprocess
 
 import pytest
 
-from anthill.git.worktrees import Worktree, WorktreeError
+from antkeeper.git.worktrees import Worktree, WorktreeError
 
 
 class TestWorktree:

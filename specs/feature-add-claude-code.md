@@ -14,7 +14,7 @@ After this change, the CLI accepts an optional prompt and model that are merged 
 
 **CLI usage:**
 ```
-anthill run [--agents-file=handlers.py] [--initial-state key=val ...] [--prompt PROMPT] [--model MODEL] WORKFLOW_NAME
+antkeeper run [--agents-file=handlers.py] [--initial-state key=val ...] [--prompt PROMPT] [--model MODEL] WORKFLOW_NAME
 ```
 
 Where `WORKFLOW_NAME` is the handler to execute (e.g., `specify`), `--prompt` is the user's request text, and `--model` is the LLM model name.
@@ -43,19 +43,19 @@ def specify(runner: Runner, state: State) -> State:
 types:
   Agent:
     kind: protocol
-    location: src/anthill/llm/__init__.py
+    location: src/antkeeper/llm/__init__.py
     methods:
       - prompt(self, prompt: str) -> str
 
   AgentExecutionError:
     kind: exception
-    location: src/anthill/llm/errors.py
+    location: src/antkeeper/llm/errors.py
     parent: Exception
     note: Message-only. Subprocess details included in message string.
 
   ClaudeCodeAgent:
     kind: class
-    location: src/anthill/llm/claude_code.py
+    location: src/antkeeper/llm/claude_code.py
     constructor:
       - model: str | None  # default None
     implements: Agent
@@ -64,16 +64,16 @@ types:
 
   CliChannel:
     kind: class
-    location: src/anthill/channels/cli.py
+    location: src/antkeeper/channels/cli.py
     note: No changes. Already accepts arbitrary initial_state dict.
 ```
 
 ## Relevant Files
 
-- `src/anthill/cli.py` — Rename positional arg from `prompt` to `workflow_name`. Add `--prompt` and `--model` optional args. Merge into initial state before constructing CliChannel.
-- `src/anthill/core/domain.py` — No changes. Agent protocol does not belong in core.
-- `src/anthill/core/runner.py` — No changes.
-- `src/anthill/channels/cli.py` — No changes. Already accepts arbitrary `initial_state`.
+- `src/antkeeper/cli.py` — Rename positional arg from `prompt` to `workflow_name`. Add `--prompt` and `--model` optional args. Merge into initial state before constructing CliChannel.
+- `src/antkeeper/core/domain.py` — No changes. Agent protocol does not belong in core.
+- `src/antkeeper/core/runner.py` — No changes.
+- `src/antkeeper/channels/cli.py` — No changes. Already accepts arbitrary `initial_state`.
 - `handlers.py` — Replace all demo handlers with `specify`, `branch`, `implement`, `document`.
 - `.claude/commands/specify.md` — Read-only. Template for specify handler prompt.
 - `.claude/commands/branch.md` — Read-only. Template for branch handler prompt.
@@ -84,16 +84,16 @@ types:
 
 ### New Files
 
-- `src/anthill/llm/__init__.py` — Package init. Defines `Agent` protocol.
-- `src/anthill/llm/errors.py` — `AgentExecutionError` exception class.
-- `src/anthill/llm/claude_code.py` — `ClaudeCodeAgent` class.
+- `src/antkeeper/llm/__init__.py` — Package init. Defines `Agent` protocol.
+- `src/antkeeper/llm/errors.py` — `AgentExecutionError` exception class.
+- `src/antkeeper/llm/claude_code.py` — `ClaudeCodeAgent` class.
 - `tests/test_claude_code_agent.py` — Tests for ClaudeCodeAgent.
 
 ## Workflow
 
 ### Step 1: Create `llm` package with Agent protocol
 
-- Create `src/anthill/llm/__init__.py` with the `Agent` protocol:
+- Create `src/antkeeper/llm/__init__.py` with the `Agent` protocol:
   ```python
   class Agent(Protocol):
       def prompt(self, prompt: str) -> str: ...
@@ -102,7 +102,7 @@ types:
 
 ### Step 2: Create AgentExecutionError
 
-- Create `src/anthill/llm/errors.py` with a simple exception:
+- Create `src/antkeeper/llm/errors.py` with a simple exception:
   ```python
   class AgentExecutionError(Exception):
       """Raised when an agent fails to execute a prompt."""
@@ -111,7 +111,7 @@ types:
 
 ### Step 3: Create ClaudeCodeAgent
 
-- Create `src/anthill/llm/claude_code.py`.
+- Create `src/antkeeper/llm/claude_code.py`.
 - Constructor: `__init__(self, model: str | None = None)`.
 - `prompt(self, prompt: str) -> str` method:
   - Build command: `["claude", "-p", prompt]`. If `self.model`, insert `"--model", self.model`.
@@ -123,7 +123,7 @@ types:
 
 ### Step 4: Update CLI
 
-- In `src/anthill/cli.py`, rename the positional argument from `prompt` to `workflow_name`:
+- In `src/antkeeper/cli.py`, rename the positional argument from `prompt` to `workflow_name`:
   ```python
   run_parser.add_argument("workflow_name")
   ```
@@ -183,7 +183,7 @@ types:
 
 **CLI tests** (update `tests/test_cli.py`):
 
-- `test_parse_run_with_workflow_name` — Verify `anthill run my_handler` parses `workflow_name="my_handler"`.
+- `test_parse_run_with_workflow_name` — Verify `antkeeper run my_handler` parses `workflow_name="my_handler"`.
 - `test_parse_run_with_prompt_flag` — Verify `--prompt "build a widget"` is parsed.
 - `test_parse_run_with_model_flag` — Verify `--model opus` is parsed.
 - `test_prompt_and_model_merged_into_state` — End-to-end: create temp agents file with handler that returns state, invoke `main()`, verify state contains `prompt` and `model` keys.
@@ -201,13 +201,13 @@ types:
 
 ## Acceptance Criteria
 
-- `anthill run --help` shows `workflow_name` positional, `--prompt`, `--model`, `--initial-state`, `--agents-file`.
-- `anthill run --prompt "describe the system" --model sonnet specify` invokes the specify handler with prompt and model in state.
+- `antkeeper run --help` shows `workflow_name` positional, `--prompt`, `--model`, `--initial-state`, `--agents-file`.
+- `antkeeper run --prompt "describe the system" --model sonnet specify` invokes the specify handler with prompt and model in state.
 - `ClaudeCodeAgent` calls `subprocess.run(["claude", "-p", ...])` and returns stdout.
 - `ClaudeCodeAgent` raises `AgentExecutionError` on non-zero exit or missing binary.
-- `Agent` protocol defined in `src/anthill/llm/__init__.py` with single `prompt(str) -> str` method.
+- `Agent` protocol defined in `src/antkeeper/llm/__init__.py` with single `prompt(str) -> str` method.
 - `handlers.py` contains `specify`, `branch`, `implement`, `document` handlers.
-- No changes to `src/anthill/core/domain.py`, `src/anthill/core/runner.py`, or `src/anthill/core/app.py`.
+- No changes to `src/antkeeper/core/domain.py`, `src/antkeeper/core/runner.py`, or `src/antkeeper/core/app.py`.
 - All existing workflow tests pass unchanged (they define their own handlers).
 - All new tests pass.
 
@@ -224,14 +224,14 @@ uv run -m ty check
 uv run -m ruff check
 
 # Verify CLI help shows new args
-uv run anthill run --help
+uv run antkeeper run --help
 ```
 
 IMPORTANT: If any of the checks above fail you must investigate and fix the error. It is not acceptable to simply explain away the problem. You must reach zero errors, zero warnings before you move on. This includes pre-existing issues and other issues that you don't think are related to this feature.
 
 ## Notes
 
-- **BREAKING CHANGE**: The CLI positional arg is renamed from `prompt` to `workflow_name`. Existing invocations like `anthill run plus_1` still work syntactically but the demo handlers they reference are removed.
+- **BREAKING CHANGE**: The CLI positional arg is renamed from `prompt` to `workflow_name`. Existing invocations like `antkeeper run plus_1` still work syntactically but the demo handlers they reference are removed.
 - The `Agent` protocol and `AgentExecutionError` live in the `llm` package, not in `core`. This preserves core genericity — the core knows nothing about agents, prompts, or LLMs.
 - `AgentExecutionError` is a simple `Exception` subclass with message only. Subprocess details (returncode, stderr) are included in the message string, keeping the error generic for future non-subprocess Agent implementations.
 - Handlers read `.claude/commands/*.md` at call time. These are application-level files, not framework resources. If missing, `FileNotFoundError` propagates naturally.
@@ -240,4 +240,4 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Report
 
-Files changed: `src/anthill/cli.py` (rename positional, add --prompt/--model flags), `handlers.py` (replace demo handlers with LLM-backed handlers), `tests/test_cli.py` (update for new args). Files created: `src/anthill/llm/__init__.py` (Agent protocol), `src/anthill/llm/errors.py` (AgentExecutionError), `src/anthill/llm/claude_code.py` (ClaudeCodeAgent), `tests/test_claude_code_agent.py`. Tests added: 4 ClaudeCodeAgent unit tests, 4 CLI tests, 2 integration tests. Validations: pytest, ty check, ruff check, CLI help verification.
+Files changed: `src/antkeeper/cli.py` (rename positional, add --prompt/--model flags), `handlers.py` (replace demo handlers with LLM-backed handlers), `tests/test_cli.py` (update for new args). Files created: `src/antkeeper/llm/__init__.py` (Agent protocol), `src/antkeeper/llm/errors.py` (AgentExecutionError), `src/antkeeper/llm/claude_code.py` (ClaudeCodeAgent), `tests/test_claude_code_agent.py`. Tests added: 4 ClaudeCodeAgent unit tests, 4 CLI tests, 2 integration tests. Validations: pytest, ty check, ruff check, CLI help verification.

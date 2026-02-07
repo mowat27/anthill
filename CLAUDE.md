@@ -1,4 +1,4 @@
-# Anthill Framework
+# Antkeeper Framework
 
 Workflow engine. `@app.handler` registers handlers, `Runner` executes.
 
@@ -6,7 +6,7 @@ Workflow engine. `@app.handler` registers handlers, `Runner` executes.
 
 Handlers: `def step(runner: Runner, state: State) -> State`. Chain: `run_workflow(runner, state, [step1, step2])`.
 
-**Logging**: `App(log_dir, worktree_dir, state_dir)` sets dirs (default `agents/logs/`, `trees/`, `.anthill/state/`). `Runner` creates `{timestamp}-{run_id}.log` + `{timestamp}-{run_id}.json`. Auto-persist. Use `runner.logger.info()`.
+**Logging**: `App(log_dir, worktree_dir, state_dir)` sets dirs (default `agents/logs/`, `trees/`, `.antkeeper/state/`). `Runner` creates `{timestamp}-{run_id}.log` + `{timestamp}-{run_id}.json`. Auto-persist. Use `runner.logger.info()`.
 
 **Git**: `Worktree(base_dir, name)`. `git_worktree(wt, create=True, branch="feat", remove=False)` guarantees cwd restore. Absolute paths.
 

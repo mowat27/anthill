@@ -1,5 +1,5 @@
 [project]
-name = "anthill"
+name = "antkeeper"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -10,7 +10,7 @@ dependencies = ["ruff", "ty", "fastapi", "uvicorn[standard]", "httpx", "python-d
 dev = ["pytest", "httpx"]
 
 [project.scripts]
-anthill = "anthill.cli:main"
+antkeeper = "antkeeper.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,6 +1,6 @@
 # patch: Persist state as JSON on every change
 
-- Add `state_dir` to `App` (default `.anthill/state/`), persist state as JSON every time it changes
+- Add `state_dir` to `App` (default `.antkeeper/state/`), persist state as JSON every time it changes
 - `Runner` writes `{timestamp}-{run_id}.json` on initial state creation, after handler returns, and after each `run_workflow` step
 - File naming mirrors log files for correlation
 
@@ -11,8 +11,8 @@
 `App` gains a `state_dir` parameter alongside existing `log_dir` and `worktree_dir`:
 
 ```python
-app = App(state_dir=".anthill/state/")  # custom directory
-app = App()                              # defaults to ".anthill/state/"
+app = App(state_dir=".antkeeper/state/")  # custom directory
+app = App()                              # defaults to ".antkeeper/state/"
 ```
 
 Channels are unaffected. Handlers are unaffected — persistence is transparent. The state file is overwritten on each change (single file per run, not one per step).
@@ -27,7 +27,7 @@ types:
         - handlers: dict
         - log_dir: str
         - worktree_dir: str
-        - state_dir: str  # New field, default ".anthill/state/"
+        - state_dir: str  # New field, default ".antkeeper/state/"
     Runner:
       kind: class
       methods:
@@ -36,8 +36,8 @@ types:
 
 ## Relevant Files
 
-- `src/anthill/core/app.py` — `App.__init__` needs `state_dir` parameter. `run_workflow` needs to call `runner._persist_state(state)` after each step.
-- `src/anthill/core/runner.py` — `Runner.__init__` needs to create the state directory and compute the state file path. Add `_persist_state` method. `Runner.run()` needs to persist after initial state creation and after handler returns.
+- `src/antkeeper/core/app.py` — `App.__init__` needs `state_dir` parameter. `run_workflow` needs to call `runner._persist_state(state)` after each step.
+- `src/antkeeper/core/runner.py` — `Runner.__init__` needs to create the state directory and compute the state file path. Add `_persist_state` method. `Runner.run()` needs to persist after initial state creation and after handler returns.
 - `tests/core/test_logging.py` — `TestAppConfiguration` needs tests for `state_dir` default and custom values.
 - `tests/conftest.py` — `app` fixture needs to include a temp `state_dir`.
 
@@ -49,7 +49,7 @@ types:
 
 ### Step 1: Add `state_dir` to `App`
 
-- Add `state_dir: str = ".anthill/state/"` parameter to `App.__init__`.
+- Add `state_dir: str = ".antkeeper/state/"` parameter to `App.__init__`.
 - Store as `self.state_dir`.
 
 ### Step 2: Add state persistence to `Runner`
@@ -71,7 +71,7 @@ types:
 ### Step 5: Add App configuration tests
 
 - In `tests/core/test_logging.py` `TestAppConfiguration`, add:
-  - `test_app_state_dir_defaults_to_anthill_state` — assert `App().state_dir == ".anthill/state/"`
+  - `test_app_state_dir_defaults_to_antkeeper_state` — assert `App().state_dir == ".antkeeper/state/"`
   - `test_app_state_dir_accepts_custom_value` — assert custom value is stored
 
 ### Step 6: Add state persistence tests
@@ -97,7 +97,7 @@ In `tests/core/test_state_persistence.py`:
 
 In `tests/core/test_logging.py` `TestAppConfiguration`:
 
-- **`test_app_state_dir_defaults_to_anthill_state`**
+- **`test_app_state_dir_defaults_to_antkeeper_state`**
 - **`test_app_state_dir_accepts_custom_value`**
 
 ### Edge Cases
@@ -107,7 +107,7 @@ In `tests/core/test_logging.py` `TestAppConfiguration`:
 
 ## Acceptance Criteria
 
-- `App()` has `state_dir` defaulting to `".anthill/state/"`
+- `App()` has `state_dir` defaulting to `".antkeeper/state/"`
 - `App(state_dir="custom/")` stores the custom path
 - `Runner.__init__` creates the state directory
 - `Runner.run()` persists state after initial creation and after handler returns

@@ -51,13 +51,13 @@ Progress and error messages include the `run_id` for correlation.
 
 ## State Persistence
 
-The framework automatically persists state as JSON on every change. State files are created in `app.state_dir` (default `.anthill/state/`) and named `{timestamp}-{run_id}.json` to match log file naming.
+The framework automatically persists state as JSON on every change. State files are created in `app.state_dir` (default `.antkeeper/state/`) and named `{timestamp}-{run_id}.json` to match log file naming.
 
 ### Configuration
 
 ```python
-app = App(state_dir=".anthill/state/")  # custom directory
-app = App()                              # defaults to ".anthill/state/"
+app = App(state_dir=".antkeeper/state/")  # custom directory
+app = App()                              # defaults to ".antkeeper/state/"
 ```
 
 ### Persistence Points
@@ -103,7 +103,7 @@ app = App()                     # defaults to "agents/logs/"
 `Runner.__init__` creates a log file at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
 
 ```
-2026-02-07 14:30:00,123 [INFO] anthill.run.a1b2c3d4 - Workflow started: my_workflow
+2026-02-07 14:30:00,123 [INFO] antkeeper.run.a1b2c3d4 - Workflow started: my_workflow
 ```
 
 The framework logs lifecycle events (runner init, workflow start/complete), handler execution (step names, state keys), and errors at INFO/DEBUG/ERROR levels. Log output does not leak to stdout/stderr (logger propagation is disabled).
@@ -139,7 +139,7 @@ No automatic retry or telemetry. Handlers are responsible for error handling pol
 
 ## Git Worktree Isolation
 
-The `anthill.git` module provides git worktree support for isolating workflow execution in separate working directories.
+The `antkeeper.git` module provides git worktree support for isolating workflow execution in separate working directories.
 
 ### Configuration
 
@@ -155,7 +155,7 @@ Access the configured worktree directory via `runner.app.worktree_dir`.
 The `Worktree` class wraps git worktree subprocess operations:
 
 ```python
-from anthill.git import Worktree, WorktreeError
+from antkeeper.git import Worktree, WorktreeError
 
 wt = Worktree(base_dir=runner.app.worktree_dir, name="20260207-a1b2c3d4")
 wt.create(branch="feat/new-feature")  # Creates worktree with new branch
@@ -170,7 +170,7 @@ All paths are stored as absolute (`os.path.realpath`) so they remain valid after
 The `git_worktree` context manager guarantees cwd restoration via try/finally:
 
 ```python
-from anthill.git import git_worktree, Worktree, WorktreeError
+from antkeeper.git import git_worktree, Worktree, WorktreeError
 
 wt = Worktree(base_dir=runner.app.worktree_dir, name="feature-work")
 
@@ -211,7 +211,7 @@ This allows matching worktrees to their log files via the run_id.
 Git operations raise `WorktreeError` on failure:
 
 ```python
-from anthill.git import WorktreeError
+from antkeeper.git import WorktreeError
 
 try:
     wt.create(branch="feat/x")

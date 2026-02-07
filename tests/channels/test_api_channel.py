@@ -5,7 +5,7 @@ Tests the ApiChannel's type, state handling, and output reporting capabilities.
 
 import pytest
 
-from anthill.channels.api import ApiChannel
+from antkeeper.channels.api import ApiChannel
 
 
 class TestApiChannel:

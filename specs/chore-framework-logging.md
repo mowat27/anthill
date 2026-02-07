@@ -44,16 +44,16 @@ def my_step(runner: Runner, state: State) -> State:
 
 Log files are created at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
 ```
-2026-02-07 14:30:00,123 [INFO] anthill.run.a1b2c3d4 - Workflow started: my_workflow
+2026-02-07 14:30:00,123 [INFO] antkeeper.run.a1b2c3d4 - Workflow started: my_workflow
 ```
 
 ## Relevant Files
 
-- `src/anthill/core/app.py` — Add `log_dir` parameter to `App.__init__`; add logging to `run_workflow`.
-- `src/anthill/core/runner.py` — Create logger with FileHandler in `Runner.__init__`; log lifecycle events in all methods.
-- `src/anthill/channels/cli.py` — Add module-level logger; log initialization at DEBUG.
-- `src/anthill/llm/claude_code.py` — Add module-level logger; log prompts, responses, and errors.
-- `src/anthill/cli.py` — Add module-level logger; log CLI lifecycle events.
+- `src/antkeeper/core/app.py` — Add `log_dir` parameter to `App.__init__`; add logging to `run_workflow`.
+- `src/antkeeper/core/runner.py` — Create logger with FileHandler in `Runner.__init__`; log lifecycle events in all methods.
+- `src/antkeeper/channels/cli.py` — Add module-level logger; log initialization at DEBUG.
+- `src/antkeeper/llm/claude_code.py` — Add module-level logger; log prompts, responses, and errors.
+- `src/antkeeper/cli.py` — Add module-level logger; log CLI lifecycle events.
 - `tests/conftest.py` — Add `app` fixture that returns `App(log_dir=tempfile.mkdtemp())` per test; update `runner_factory` to use it.
 - `app_docs/instrumentation.md` — Update logging section to reflect new capability.
 
@@ -67,17 +67,17 @@ Log files are created at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
 
 ### Step 1: Add `log_dir` parameter to App
 
-- In `src/anthill/core/app.py`, change `App.__init__` to accept `log_dir: str = "agents/logs/"` and store as `self.log_dir`.
+- In `src/antkeeper/core/app.py`, change `App.__init__` to accept `log_dir: str = "agents/logs/"` and store as `self.log_dir`.
 - No other changes to App class at this step.
 
 ### Step 2: Create logger in Runner
 
-- In `src/anthill/core/runner.py`, add imports: `import logging`, `import os`, `from datetime import datetime`.
+- In `src/antkeeper/core/runner.py`, add imports: `import logging`, `import os`, `from datetime import datetime`.
 - In `Runner.__init__`, after generating `self.id`:
   - Create log directory: `os.makedirs(app.log_dir, exist_ok=True)`
   - Build log filename: `f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{self.id}.log"`
   - Build log path: `os.path.join(app.log_dir, log_filename)`
-  - Create logger: `self.logger = logging.getLogger(f"anthill.run.{self.id}")`
+  - Create logger: `self.logger = logging.getLogger(f"antkeeper.run.{self.id}")`
   - Set logger level to `logging.DEBUG`
   - Create `logging.FileHandler(log_path)`
   - Set formatter: `logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s")`
@@ -92,7 +92,7 @@ Log files are created at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
 
 ### Step 3: Add logging to run_workflow
 
-- In `src/anthill/core/app.py`, in the `run_workflow` function:
+- In `src/antkeeper/core/app.py`, in the `run_workflow` function:
   - Before the loop: `runner.logger.info(f"run_workflow started with {len(steps)} steps: {[s.__name__ for s in steps]}")`
   - Inside loop, before each step: `runner.logger.info(f"Executing step: {step.__name__}")`
   - Inside loop, after each step: `runner.logger.debug(f"Step completed: {step.__name__}, state keys: {list(state.keys())}")`
@@ -100,14 +100,14 @@ Log files are created at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
 
 ### Step 4: Add module-level logging to outer layers
 
-- In `src/anthill/channels/cli.py`:
-  - Add `import logging` and `logger = logging.getLogger("anthill.channels.cli")` at module level.
+- In `src/antkeeper/channels/cli.py`:
+  - Add `import logging` and `logger = logging.getLogger("antkeeper.channels.cli")` at module level.
   - In `__init__`: `logger.debug(f"CliChannel initialized: workflow_name={workflow_name}")`
   - In `report_progress`: `logger.debug(f"Progress [{run_id}]: {message}")`
   - In `report_error`: `logger.debug(f"Error [{run_id}]: {message}")`
 
-- In `src/anthill/llm/claude_code.py`:
-  - Add `import logging` and `logger = logging.getLogger("anthill.llm.claude_code")` at module level.
+- In `src/antkeeper/llm/claude_code.py`:
+  - Add `import logging` and `logger = logging.getLogger("antkeeper.llm.claude_code")` at module level.
   - In `__init__`: `logger.debug(f"ClaudeCodeAgent initialized: model={self.model}")`
   - In `prompt()`:
     - Before subprocess: `logger.info(f"LLM prompt submitted (length={len(prompt)} chars)")` and `logger.debug(f"LLM prompt content: {prompt}")`
@@ -116,8 +116,8 @@ Log files are created at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
     - On FileNotFoundError: `logger.error("claude binary not found")`
     - On non-zero exit: `logger.error(f"claude exited with code {result.returncode}: {result.stderr}")`
 
-- In `src/anthill/cli.py`:
-  - Add `import logging` and `logger = logging.getLogger("anthill.cli")` at module level.
+- In `src/antkeeper/cli.py`:
+  - Add `import logging` and `logger = logging.getLogger("antkeeper.cli")` at module level.
   - After parsing args: `logger.debug(f"CLI args parsed: command={args.command}")`
   - After loading app: `logger.info(f"App loaded from {agents_file}")`
   - On FileNotFoundError: `logger.error(f"Agents file not found: {agents_file}")`
@@ -125,7 +125,7 @@ Log files are created at `{log_dir}/{YYYYMMDDhhmmss}-{run_id}.log` with format:
   - After creating runner: `logger.info(f"Runner created: run_id={runner.id}")`
   - After `runner.run()`: `logger.info("Workflow run complete")`
 
-Note: Module-level loggers in outer layers (`anthill.channels.cli`, `anthill.llm.claude_code`, `anthill.cli`) will only produce output if a handler is attached to them or a parent logger. By default, these logs go nowhere — they serve as extension points for users who want to configure additional logging. The primary logging (lifecycle, state, errors) happens through `runner.logger` which always has a FileHandler.
+Note: Module-level loggers in outer layers (`antkeeper.channels.cli`, `antkeeper.llm.claude_code`, `antkeeper.cli`) will only produce output if a handler is attached to them or a parent logger. By default, these logs go nowhere — they serve as extension points for users who want to configure additional logging. The primary logging (lifecycle, state, errors) happens through `runner.logger` which always has a FileHandler.
 
 ### Step 5: Update conftest.py and existing tests for test isolation
 
@@ -143,7 +143,7 @@ Move test files to mirror the source structure.
 | `tests/test_workflows.py` | `tests/core/test_workflows.py` |
 | `tests/test_cli_channel.py` | `tests/channels/test_cli_channel.py` |
 | `tests/test_claude_code_agent.py` | `tests/llm/test_claude_code_agent.py` |
-| `tests/test_cli.py` | `tests/test_cli.py` (stays — mirrors `src/anthill/cli.py` at root) |
+| `tests/test_cli.py` | `tests/test_cli.py` (stays — mirrors `src/antkeeper/cli.py` at root) |
 | `tests/conftest.py` | `tests/conftest.py` (stays — pytest discovers it for all subdirs) |
 | `tests/__init__.py` | `tests/__init__.py` (stays) |
 
@@ -176,7 +176,7 @@ New file: `tests/core/test_logging.py`
 - `test_runner_creates_log_file_with_correct_name_format` — Exactly one `.log` file in log dir, filename matches `r"^\d{14}-[a-f0-9]{8}\.log$"`, run_id portion matches `runner.id`.
 
 **Log content and format:**
-- `test_log_format_matches_expected_pattern` — Log file lines match `r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \[\w+\] anthill\..+ - .+"`.
+- `test_log_format_matches_expected_pattern` — Log file lines match `r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \[\w+\] antkeeper\..+ - .+"`.
 - `test_runner_log_file_contains_initialization_message` — Log file contains `[INFO]` and runner ID.
 - `test_runner_logs_workflow_start_and_end` — After `runner.run()`, log contains INFO entries for start and completion.
 - `test_runner_logs_initial_and_final_state_at_debug` — Log contains DEBUG entries with state contents.
@@ -188,7 +188,7 @@ New file: `tests/core/test_logging.py`
 - `test_runner_logs_error_at_error_level` — When handler raises, log contains `[ERROR]` with exception info.
 
 **Logger isolation:**
-- `test_anthill_logger_does_not_leak_to_stdout` — After workflow, capsys stdout/stderr does not contain log format lines.
+- `test_antkeeper_logger_does_not_leak_to_stdout` — After workflow, capsys stdout/stderr does not contain log format lines.
 
 All logging tests use the `app` fixture (which provides `App(log_dir=tempfile.mkdtemp())`). Tests must clean up FileHandlers after use to prevent resource leaks across the test suite (use `try/finally` or fixture teardown to call `handler.close()` and remove from logger).
 
@@ -229,8 +229,8 @@ test ! -f tests/test_claude_code_agent.py && echo "OK: old file removed" || echo
 
 # Verify log file creation works
 uv run python -c "
-from anthill.core.app import App
-from anthill.core.runner import Runner
+from antkeeper.core.app import App
+from antkeeper.core.runner import Runner
 import tempfile, os, glob
 app = App(log_dir=tempfile.mkdtemp())
 
@@ -257,8 +257,8 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Notes
 
-- The logger is attached per-Runner instance (keyed by `anthill.run.{run_id}`), NOT to a shared parent logger. This prevents handler accumulation when multiple Runners are created from the same App.
-- Module-level loggers in outer layers (`anthill.channels.cli`, `anthill.llm.claude_code`, `anthill.cli`) are fire-and-forget — they only produce output if a user configures handlers on them or their parents. They are not connected to the per-run FileHandler by default.
+- The logger is attached per-Runner instance (keyed by `antkeeper.run.{run_id}`), NOT to a shared parent logger. This prevents handler accumulation when multiple Runners are created from the same App.
+- Module-level loggers in outer layers (`antkeeper.channels.cli`, `antkeeper.llm.claude_code`, `antkeeper.cli`) are fire-and-forget — they only produce output if a user configures handlers on them or their parents. They are not connected to the per-run FileHandler by default.
 - `os.makedirs` errors (permissions, disk full) are allowed to propagate per design philosophy — these are runtime errors that should surface to the caller.
 - The `ClaudeCodeAgent` interface is NOT changed (no optional logger parameter). It uses a module-level logger only.
 

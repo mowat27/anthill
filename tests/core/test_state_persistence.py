@@ -8,8 +8,8 @@ import json
 import os
 import re
 
-from anthill.core.app import run_workflow
-from anthill.core.domain import State
+from antkeeper.core.app import run_workflow
+from antkeeper.core.domain import State
 
 
 class TestRunnerStatePersistence:

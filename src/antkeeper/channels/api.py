@@ -1,4 +1,4 @@
-"""API channel implementation for Anthill workflows.
+"""API channel implementation for Antkeeper workflows.
 
 This module provides an ApiChannel that adapts workflows for use in
 web servers and HTTP APIs. Progress and errors are written to stdout/stderr.
@@ -6,7 +6,7 @@ web servers and HTTP APIs. Progress and errors are written to stdout/stderr.
 import sys
 from typing import Any
 
-from anthill.core.domain import State
+from antkeeper.core.domain import State
 
 
 class ApiChannel:

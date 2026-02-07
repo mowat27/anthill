@@ -2,7 +2,7 @@
 
 import pytest
 
-from anthill.helpers.json import extract_json
+from antkeeper.helpers.json import extract_json
 
 
 def test_clean_json():

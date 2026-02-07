@@ -1,13 +1,13 @@
-"""Webhook endpoint logic for Anthill workflow triggers."""
+"""Webhook endpoint logic for Antkeeper workflow triggers."""
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from anthill.channels.api import ApiChannel
-from anthill.core.app import App
-from anthill.core.runner import Runner
-from anthill.http import run_workflow_background
+from antkeeper.channels.api import ApiChannel
+from antkeeper.core.app import App
+from antkeeper.core.runner import Runner
+from antkeeper.http import run_workflow_background
 
 
 class WebhookRequest(BaseModel):
@@ -30,8 +30,8 @@ class WebhookResponse(BaseModel):
     run_id: str
 
 
-async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, anthill_app: App) -> WebhookResponse:
-    """Handle incoming webhook requests to trigger Anthill workflows.
+async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, antkeeper_app: App) -> WebhookResponse:
+    """Handle incoming webhook requests to trigger Antkeeper workflows.
 
     Validates the workflow exists, creates a Runner with an ApiChannel, and
     schedules the workflow execution in the background.
@@ -39,7 +39,7 @@ async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTa
     Args:
         request: Webhook request containing workflow name and initial state.
         background_tasks: FastAPI background tasks manager for async execution.
-        anthill_app: The Anthill application instance with registered handlers.
+        antkeeper_app: The Antkeeper application instance with registered handlers.
 
     Returns:
         WebhookResponse containing the unique run ID for tracking the workflow.
@@ -48,11 +48,11 @@ async def handle_webhook(request: WebhookRequest, background_tasks: BackgroundTa
         HTTPException: 404 error if the specified workflow name is not registered.
     """
     try:
-        anthill_app.get_handler(request.workflow_name)
+        antkeeper_app.get_handler(request.workflow_name)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Unknown workflow: {request.workflow_name}")
 
     channel = ApiChannel(request.workflow_name, request.initial_state)
-    runner = Runner(anthill_app, channel)
+    runner = Runner(antkeeper_app, channel)
     background_tasks.add_task(run_workflow_background, runner)
     return WebhookResponse(run_id=runner.id)

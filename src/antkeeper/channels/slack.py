@@ -1,4 +1,4 @@
-"""Slack channel implementation for Anthill workflows.
+"""Slack channel implementation for Antkeeper workflows.
 
 Posts handler progress and error messages to the originating Slack thread
 via synchronous httpx.Client calls.
@@ -8,9 +8,9 @@ from typing import Any
 
 import httpx
 
-from anthill.core.domain import State
+from antkeeper.core.domain import State
 
-logger = logging.getLogger("anthill.channels.slack")
+logger = logging.getLogger("antkeeper.channels.slack")
 
 
 class SlackChannel:

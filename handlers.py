@@ -1,4 +1,4 @@
-"""LLM-backed workflow handlers for the Anthill framework.
+"""LLM-backed workflow handlers for the Antkeeper framework.
 
 Each handler runs a slash command via ClaudeCodeAgent, extracts structured
 data from the response, and threads it through state for downstream steps.
@@ -6,12 +6,12 @@ data from the response, and threads it through state for downstream steps.
 
 from datetime import datetime
 
-from anthill.core.runner import Runner
-from anthill.core.domain import State
-from anthill.core.app import App, run_workflow
-from anthill.git.worktrees import Worktree, git_worktree
-from anthill.helpers.json import extract_json
-from anthill.llm.claude_code import ClaudeCodeAgent
+from antkeeper.core.runner import Runner
+from antkeeper.core.domain import State
+from antkeeper.core.app import App, run_workflow
+from antkeeper.git.worktrees import Worktree, git_worktree
+from antkeeper.helpers.json import extract_json
+from antkeeper.llm.claude_code import ClaudeCodeAgent
 
 app = App()
 

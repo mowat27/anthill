@@ -1,11 +1,11 @@
-"""HTTP package for Anthill server.
+"""HTTP package for Antkeeper server.
 
 Provides shared utilities for HTTP route handlers.
 """
 import sys
 
-from anthill.core.domain import WorkflowFailedError
-from anthill.core.runner import Runner
+from antkeeper.core.domain import WorkflowFailedError
+from antkeeper.core.runner import Runner
 
 
 def run_workflow_background(runner: Runner) -> None:

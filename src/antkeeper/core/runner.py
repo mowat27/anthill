@@ -21,8 +21,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, NoReturn
 
-from anthill.core.domain import State, Channel, WorkflowFailedError
-from anthill.core.app import App
+from antkeeper.core.domain import State, Channel, WorkflowFailedError
+from antkeeper.core.app import App
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -73,7 +73,7 @@ class Runner:
         # Set up per-run state file
         os.makedirs(app.state_dir, exist_ok=True)
         self._state_path = os.path.join(app.state_dir, f"{timestamp}-{self.id}.json")
-        self.logger = logging.getLogger(f"anthill.run.{self.id}")
+        self.logger = logging.getLogger(f"antkeeper.run.{self.id}")
         self.logger.setLevel(logging.DEBUG)
         file_handler = logging.FileHandler(log_path)
         file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s"))
