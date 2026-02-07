@@ -1,105 +1,85 @@
-"""Example workflow handlers for the Anthill framework.
+"""LLM-backed workflow handlers for the Anthill framework.
 
-This module demonstrates basic handler patterns including state initialization,
-simple transformations, failure simulation, and workflow composition.
+Each handler runs a slash command via ClaudeCodeAgent with the user prompt.
 """
 
 from anthill.core.runner import Runner
-
-from typing import NoReturn
 from anthill.core.domain import State
-
-from anthill.core.app import App, run_workflow
+from anthill.core.app import App
+from anthill.llm.claude_code import ClaudeCodeAgent
 
 app = App()
 
-# -- Agents --------------------------------------------------------------------
 
-
-@app.handler
-def init_state(runner: Runner, state: State) -> State | NoReturn:
-    """Initialize workflow state with run metadata.
+def _run_command(name: str, runner: Runner, state: State) -> State:
+    """Run a Claude Code slash command via ClaudeCodeAgent.
 
     Args:
-        runner: The runner executing this handler.
-        state: Current workflow state.
+        name: The slash command name (e.g., 'specify', 'branch').
+        runner: The Runner instance managing the workflow.
+        state: Current workflow state containing 'prompt' and optional 'model'.
 
     Returns:
-        Updated state with run_id and workflow_name added.
+        Updated state dictionary with 'result' key containing agent response.
     """
-    runner.report_progress("Initializing state")
-    return {**state, **{"run_id": runner.id,
-                        "workflow_name": runner.workflow_name}}
+    runner.report_progress(f"Running /{name}")
+    agent = ClaudeCodeAgent(model=state.get("model"))
+    response = agent.prompt(f"/{name} {state['prompt']}")
+    runner.report_progress(f"/{name} complete")
+    return {**state, "result": response}
 
 
 @app.handler
-def plus_1(runner: Runner, state: State) -> State | NoReturn:
-    """Add 1 to the result value in state.
+def specify(runner: Runner, state: State) -> State:
+    """Generate a specification from a user prompt.
 
     Args:
-        runner: The runner executing this handler.
-        state: Current workflow state containing a 'result' key.
+        runner: The Runner instance managing the workflow.
+        state: Current workflow state containing 'prompt' and optional 'model'.
 
     Returns:
-        Updated state with result incremented by 1.
+        Updated state with specification in 'result' key.
     """
-    runner.report_progress("adding 1")
-    return {**state, **{"result": int(state["result"]) + 1}}
+    return _run_command("specify", runner, state)
 
 
 @app.handler
-def times_2(runner: Runner, state: State) -> State | NoReturn:
-    """Multiply the result value in state by 2.
+def branch(runner: Runner, state: State) -> State:
+    """Create a feature branch from a plan file.
 
     Args:
-        runner: The runner executing this handler.
-        state: Current workflow state containing a 'result' key.
+        runner: The Runner instance managing the workflow.
+        state: Current workflow state containing 'prompt' and optional 'model'.
 
     Returns:
-        Updated state with result multiplied by 2.
+        Updated state with branch creation result in 'result' key.
     """
-    runner.report_progress("multiplying by 2")
-    return {**state, **{"result": int(state["result"]) * 2}}
+    return _run_command("branch", runner, state)
 
 
 @app.handler
-def simulate_failure(runner: Runner, _state: State) -> State | NoReturn:
-    """Simulate a workflow failure for testing error handling.
+def implement(runner: Runner, state: State) -> State:
+    """Implement a feature from a spec/plan.
 
     Args:
-        runner: The runner executing this handler.
-        _state: Current workflow state (unused).
-
-    Raises:
-        SystemExit: Always raises via runner.fail() to terminate the workflow.
-    """
-    runner.channel.report_error(runner.id, "simulating a failure")
-    runner.fail("Workflow failed")
-
-
-@app.handler
-def plus_1_times_2(runner: Runner, state: State) -> State | NoReturn:
-    """Execute a composite workflow: initialize, add 1, then multiply by 2.
-
-    Args:
-        runner: The runner executing this handler.
-        state: Current workflow state.
+        runner: The Runner instance managing the workflow.
+        state: Current workflow state containing 'prompt' and optional 'model'.
 
     Returns:
-        State after executing the init_state, plus_1, and times_2 handlers.
+        Updated state with implementation result in 'result' key.
     """
-    return run_workflow(runner, state, [init_state, plus_1, times_2])
+    return _run_command("implement", runner, state)
 
 
 @app.handler
-def plus_1_times_2_times_2(runner: Runner, state: State) -> State | NoReturn:
-    """Execute a nested composite workflow: (result + 1) * 2 * 2.
+def document(runner: Runner, state: State) -> State:
+    """Update documentation for completed work.
 
     Args:
-        runner: The runner executing this handler.
-        state: Current workflow state.
+        runner: The Runner instance managing the workflow.
+        state: Current workflow state containing 'prompt' and optional 'model'.
 
     Returns:
-        State after executing plus_1_times_2 followed by times_2.
+        Updated state with documentation update result in 'result' key.
     """
-    return run_workflow(runner, state, [plus_1_times_2, times_2])
+    return _run_command("document", runner, state)

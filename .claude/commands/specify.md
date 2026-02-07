@@ -31,6 +31,7 @@ CRITICAL REQUIREMENTS - You MUST follow these exactly:
 6. **USE THE FORMAT EXACTLY.** Follow the `Spec Format` section precisely. Do not skip sections or invent new structure.
 7. **FOLLOW THE RULES.** Use the `Rules` to define specific sections.
 8. **NO PLAN MODE** Under no circumstances should you or any agent enter plan mode.
+9. **AVOID OVER SPECIFICATION** Only include changes that are actually needed.  Avoid mentioning anything unecessary that could bloat the context of a builder agent such as files that do not need to change or future features that may come later.
 
 ### Rules
 
@@ -88,6 +89,7 @@ If `ARGUMENTS` contain "BREAKING CHANGE" or similar ("BREAKING_CHANGE", "breakin
 - **Each test owns its setup.** Build the `App`, register handlers, and wire the `Mission` inside the test. No shared global state. This makes it obvious what each test is actually exercising.
 - **Replace I/O at the boundary.** Swap sources/sinks that do I/O (print, stderr) with capturing doubles that collect into lists. Match the interface via duck typing.
 - **One test per code path.** If two tests traverse the same core path with different data, they're the same test. A single-handler workflow is one path regardless of what the handler computes.
+- Refer to `app_docs/testing_policy.md` as well
 
 ## Workflow
 
@@ -102,7 +104,7 @@ agent's research out of your context window while giving you simple sequential/p
     - **Craig** (subagent_type: craig) — assesses the Designer's output for simplicity
     - **Eduard** (subagent_type: eduard) — assesses the Designer's output for correctness and consistency
 3. Synthesize all inputs, resolve conflicts, and write the final spec file. Only you write the spec.
-4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `bugfix-{descriptive-slug}.md`
+4. Populate the template in the `Spec Format` and write the spec to `specs/` with filename: `{FEATURE_TYPE}-{SLUG}.md`
 
 **Rules for spawning agents:**
 - Pass the Designer's summary into each reviewer's prompt — do not make them re-read the codebase.
@@ -167,6 +169,11 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 <Describe what the spec should report.  Minimum: files changed, tests added, validations added.  Include anything else that might be useful. Max length: 200 words>
 ```
+
+## Relevant Files
+
+* `app_docs/README.md` - provides an index into the application documentation files.  You MUST read this and use the resources provided to ensure you are building to existing standards
+* `README.md` - contains developer documentation and how to use the framework.  Use this as additional context.
 
 ## Report
 

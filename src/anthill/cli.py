@@ -56,7 +56,14 @@ def main():
     """Main entry point for the Anthill CLI.
 
     Parses command-line arguments and executes the requested workflow.
-    Supports the 'run' command with agents file and initial state configuration.
+    Supports the 'run' command with the following options:
+    - --agents-file: Path to Python file containing the app (default: handlers.py)
+    - --initial-state: Key=value pairs for initial workflow state (repeatable)
+    - --prompt: User prompt to pass to the workflow
+    - --model: Model identifier to use for LLM operations
+    - workflow_name: Name of the workflow to execute
+
+    Exits with status 0 on success, 1 on error.
     """
     parser = argparse.ArgumentParser(prog="anthill")
     subparsers = parser.add_subparsers(dest="command")
@@ -64,7 +71,9 @@ def main():
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--agents-file", default="handlers.py")
     run_parser.add_argument("--initial-state", action="append", default=[])
-    run_parser.add_argument("prompt")
+    run_parser.add_argument("--prompt", default=None)
+    run_parser.add_argument("--model", default=None)
+    run_parser.add_argument("workflow_name")
 
     args = parser.parse_args()
 
@@ -84,7 +93,11 @@ def main():
             sys.exit(1)
 
         state = parse_state_pairs(args.initial_state)
-        channel = CliChannel(workflow_name=args.prompt, initial_state=state)
+        if args.prompt is not None:
+            state["prompt"] = args.prompt
+        if args.model is not None:
+            state["model"] = args.model
+        channel = CliChannel(workflow_name=args.workflow_name, initial_state=state)
         runner = Runner(app, channel)
         result = runner.run()
         print(result)

@@ -21,9 +21,29 @@ FOCUS: Git commit(s), files, directories, experts etc. Default to whole system.
 ## Workflow
 
 * Find all python files in the focus area using the appropriate method (`git`, `ls` etc) but do not read them
-* Spawn up to 5 **Documenter** agents (blocking Tasks, subagent_type: general-purpose). Each reads a batch of files, updates the python docs and returns a concise summary. Do NOT spawn it in the background.
-* Ask the `design-expert` skill to "self improve"
-* Update the readme with developer instructions to navigate the codebase - ask the design-expert skill about how it works
+* Spawn subagents to do the following (blocking Tasks, subagent_type: general-purpose)
+  * **Python Documenter** agents (max: 5). Each reads a batch of files, updates the python docs and returns a concise summary. Do NOT spawn it in the background.
+  * **Expert Updater** agent. Asks the `design-expert` skill to "self improve"
+  * **App Docs Updater** agent.  Follows `App Doc Update Workflow`
+
+### App Doc Update Workflow
+
+* Find commits related to the FOCUS
+* Find the spec(s) related to the current FOCUS in `spec/`
+  - **hint**: if the FOCUS is a branch then you must choose the spec that matches the branch name. Do not waste time searching them all.
+* Look for changes to our policies
+  - new ideas that were included in the spec
+  - changes that were made after the main build (ie gaps in our specs)
+  - anything else that indicated a gap in the spec or surrounding documentation
+* Use the information to update the following files
+  * **app_decs/testing_policy.md** - documents how we do testing - e.g. test approach, fixture management etc - NOT the specifics of the test cases we run (those can be taken from the code)
+  * **app_decs/instrumentation.md** - documents how we report progress at runtime. This includes logging and state persistance.
+  * **README.md** - developer documentation - how to install and use.  Do not reference other files.  This is just enough for developers to get oriented not a complete instruction manual and they can ask an Agent if they need to learn more.
+  * **CLAUDE.md** - Agent documentation - VERY MINIMAL - 250 tokens max.  Only include things in here that every AGENT absolutely **has** to know to get oriented.  Everything else must be retrieved from other files.  Be consice - sacrifice grammar for the sake of concision. Do not cheat by telling agents to read any additional files.
+* Update `app_decs/README.md` with an index of the files in `app_docs/` and what is covered by each.
+
+IMPORTANT: if any files are not present then create them from scratch by looking at the existing codebase, `README.md` and `CLAUDE.md`.  Move redundant information out of `README.md` and `CLAUDE.md` if it is covered by the new docs.
+
 
 ## Report
 

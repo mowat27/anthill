@@ -15,6 +15,9 @@ uv sync
 
 # Run a workflow
 anthill run --agents-file handlers.py --initial-state result=5 plus_1
+
+# Run an LLM workflow with prompt and model
+anthill run --agents-file handlers.py --prompt "describe this project" --model sonnet specify
 ```
 
 ## Project Structure
@@ -27,6 +30,10 @@ src/anthill/
 │   └── runner.py       # Runner execution engine
 ├── channels/
 │   └── cli.py          # CLI channel adapter (stdout/stderr reporting)
+├── llm/                # LLM agent abstraction layer
+│   ├── __init__.py     # Agent protocol
+│   ├── errors.py       # AgentExecutionError
+│   └── claude_code.py  # ClaudeCodeAgent (subprocess-based)
 └── cli.py              # Argparse-based CLI entry point
 ```
 
@@ -37,6 +44,8 @@ src/anthill/
 - **App** — Handler registry. Use the `@app.handler` decorator to register workflow steps by function name.
 - **Runner** — Execution engine. Binds an `App` + `Channel`, generates a `run_id`, and drives the workflow lifecycle.
 - **run_workflow** — Composition helper. Folds state through a list of handler callables, enabling composite workflows without inheritance or a DAG scheduler.
+- **Agent** (Protocol) — LLM abstraction. Any object with a `prompt(str) -> str` method qualifies. Extension point for new LLM backends.
+- **ClaudeCodeAgent** — Concrete `Agent` implementation. Delegates prompts to the `claude` CLI via subprocess. Accepts an optional `model` parameter.
 
 ### Data Flow
 
@@ -45,7 +54,8 @@ src/anthill/
 3. `Runner(app, channel).run()` merges initial state with `{run_id, workflow_name}`
 4. Handler receives `(runner, state)` and returns new `State`
 5. Composite handlers use `run_workflow` to chain sub-steps
-6. Result state is printed to stdout
+6. For LLM workflows: handler creates an `Agent`, calls `agent.prompt()`, and spreads the response into state
+7. Result state is printed to stdout
 
 ### Writing Handlers
 
@@ -66,6 +76,18 @@ def my_step(runner: Runner, state: State) -> State:
 
 Handlers always return a **new** dict (spread pattern) — never mutate incoming state.
 
+Handlers can delegate to LLM agents:
+
+```python
+from anthill.llm.claude_code import ClaudeCodeAgent
+
+@app.handler
+def ask_llm(runner: Runner, state: State) -> State:
+    agent = ClaudeCodeAgent(model=state.get("model"))
+    response = agent.prompt(state["prompt"])
+    return {**state, "result": response}
+```
+
 ## Development
 
 ### Quality Checks
@@ -80,14 +102,29 @@ just ty      # Type-check
 just test    # Tests
 ```
 
-### Running Tests
+### Testing
 
 ```bash
 uv run -m pytest tests/ -v
 ```
 
-Tests follow these rules:
-- **Test the framework, not the app.** Import from `anthill.core.*`.
-- **Each test owns its setup.** No shared global state.
-- **Replace I/O at the boundary.** Swap channels with capturing doubles.
-- **One test per code path.**
+See [app_docs/testing_policy.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/testing_policy.md) for detailed testing guidelines.
+
+### Navigating the Codebase
+
+Start with the **core layer** (`src/anthill/core/`):
+- `domain.py` defines `State` and the `Channel` protocol — the two types everything else depends on
+- `app.py` has the `App` registry and `run_workflow` composition helper
+- `runner.py` ties `App` + `Channel` together and drives execution
+
+The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` is the only implementation; add new channels here for other I/O patterns (API, message queue, etc.).
+
+The **llm layer** (`src/anthill/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
+
+The **CLI** (`src/anthill/cli.py`) is the entry point. It loads user-defined handlers from a Python file (default: `handlers.py`) and wires everything together.
+
+### Framework Documentation
+
+- [app_docs/testing_policy.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/testing_policy.md) - Testing approach and fixture management
+- [app_docs/instrumentation.md](/Users/adrian/code/mowat27/precision-weave/anthill/app_docs/instrumentation.md) - Progress reporting and error handling patterns
+- [CLAUDE.md](/Users/adrian/code/mowat27/precision-weave/anthill/CLAUDE.md) - Quick reference for AI agents
