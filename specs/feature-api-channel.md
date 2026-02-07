@@ -2,7 +2,7 @@
 
 - Add `ApiChannel` and FastAPI server with `POST /webhook` that runs workflows as background tasks, returns `run_id` immediately.
 - BREAKING CHANGE: `Runner.fail()` raises `WorkflowFailedError` instead of `exit(1)`; CLI catches and exits, preserving behaviour.
-- New `anthill server` CLI subcommand starts uvicorn with forwarded options.
+- New `antkeeper server` CLI subcommand starts uvicorn with forwarded options.
 
 ## Solution Design
 
@@ -22,12 +22,12 @@ Response: {"run_id": "a1b2c3d4"}
 
 **CLI server start:**
 ```bash
-anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py
+antkeeper server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 ```
 
 **CLI run (unchanged interface, new error handling):**
 ```bash
-anthill run --agents-file handlers.py my_workflow
+antkeeper run --agents-file handlers.py my_workflow
 # On failure: prints error to stderr, exits 1 (same as before)
 ```
 
@@ -70,18 +70,18 @@ types:
 
 ## Relevant Files
 
-- `src/anthill/core/domain.py` — Add `WorkflowFailedError` exception alongside existing domain types.
-- `src/anthill/core/runner.py` — Change `Runner.fail()` to raise `WorkflowFailedError` instead of `exit(1)`.
-- `src/anthill/channels/cli.py` — Reference for channel implementation patterns. No changes needed.
-- `src/anthill/cli.py` — Add `server` subcommand, catch `WorkflowFailedError` in `run` command, move `load_app` to remain importable by server.
+- `src/antkeeper/core/domain.py` — Add `WorkflowFailedError` exception alongside existing domain types.
+- `src/antkeeper/core/runner.py` — Change `Runner.fail()` to raise `WorkflowFailedError` instead of `exit(1)`.
+- `src/antkeeper/channels/cli.py` — Reference for channel implementation patterns. No changes needed.
+- `src/antkeeper/cli.py` — Add `server` subcommand, catch `WorkflowFailedError` in `run` command, move `load_app` to remain importable by server.
 - `pyproject.toml` — Add `fastapi` and `uvicorn[standard]` dependencies, add `httpx` to dev deps.
 - `tests/core/test_workflows.py` — Update `test_failure` to expect `WorkflowFailedError` instead of `SystemExit`.
 - `tests/conftest.py` — Reference for test patterns (TestChannel, runner_factory).
 
 ### New Files
 
-- `src/anthill/channels/api.py` — `ApiChannel` implementing the Channel protocol with `type="api"`.
-- `src/anthill/server.py` — FastAPI app with `POST /webhook` endpoint.
+- `src/antkeeper/channels/api.py` — `ApiChannel` implementing the Channel protocol with `type="api"`.
+- `src/antkeeper/server.py` — FastAPI app with `POST /webhook` endpoint.
 - `tests/channels/test_api_channel.py` — Unit tests for `ApiChannel`.
 - `tests/test_server.py` — Tests for the server endpoint.
 
@@ -89,27 +89,27 @@ types:
 
 ### Step 1: Add WorkflowFailedError and update Runner.fail()
 
-- In `src/anthill/core/domain.py`, add `WorkflowFailedError(Exception)` — simple exception, no custom attributes.
-- In `src/anthill/core/runner.py`, change `Runner.fail()`:
+- In `src/antkeeper/core/domain.py`, add `WorkflowFailedError(Exception)` — simple exception, no custom attributes.
+- In `src/antkeeper/core/runner.py`, change `Runner.fail()`:
   - Remove `print(message, file=sys.stderr)` and `exit(1)`.
   - Replace with `raise WorkflowFailedError(message)`. Keep the existing `self.logger.error(...)` line.
   - Keep return type as `NoReturn` (a function that always raises satisfies `NoReturn`).
-  - Import `WorkflowFailedError` from `anthill.core.domain`.
+  - Import `WorkflowFailedError` from `antkeeper.core.domain`.
   - Remove `sys` import if no longer needed (check other usages first).
 
 ### Step 2: Update CLI to catch WorkflowFailedError
 
-- In `src/anthill/cli.py`, in the `run` command block:
+- In `src/antkeeper/cli.py`, in the `run` command block:
   - Wrap `runner.run()` in a try/except that catches `WorkflowFailedError`.
   - In the except block: `print(str(e), file=sys.stderr)` then `sys.exit(1)`.
   - This preserves the current CLI behaviour where users see the error on stderr and get exit code 1.
-  - Import `WorkflowFailedError` from `anthill.core.domain`.
+  - Import `WorkflowFailedError` from `antkeeper.core.domain`.
 
 ### Step 3: Update existing tests for Runner.fail() change
 
 - In `tests/core/test_workflows.py`, update `test_failure`:
   - Change `pytest.raises(SystemExit)` to `pytest.raises(WorkflowFailedError)`.
-  - Import `WorkflowFailedError` from `anthill.core.domain`.
+  - Import `WorkflowFailedError` from `antkeeper.core.domain`.
   - Keep the assertion on `source.error_messages` — note that `fail()` no longer calls `report_error()`, so the test handler must call `report_error()` separately (which it already does on the line before `fail()`). The assertion `source.error_messages == ["something broke"]` still works because the handler calls `runner.report_error("something broke")` before `runner.fail("Workflow failed")`.
 
 ### Step 4: Add dependencies
@@ -120,7 +120,7 @@ types:
 
 ### Step 5: Create ApiChannel
 
-- Create `src/anthill/channels/api.py`:
+- Create `src/antkeeper/channels/api.py`:
   - `ApiChannel` class with `type = "api"`.
   - Constructor takes `workflow_name: str` and `initial_state: dict[str, str] | None = None`, defaults to `{}` if None (same pattern as CliChannel).
   - `report_progress(self, run_id, message, **opts)`: `print(f"[{self.workflow_name}, {run_id}] {message}", flush=True)`.
@@ -129,13 +129,13 @@ types:
 
 ### Step 6: Create server module
 
-- Create `src/anthill/server.py`:
+- Create `src/antkeeper/server.py`:
   - Import `FastAPI`, `BackgroundTasks`, `HTTPException` from `fastapi`.
   - Import `BaseModel` from `pydantic`.
-  - Import `load_app` from `anthill.cli`.
-  - Import `ApiChannel` from `anthill.channels.api`.
-  - Import `Runner` from `anthill.core.runner`.
-  - Import `WorkflowFailedError` from `anthill.core.domain`.
+  - Import `load_app` from `antkeeper.cli`.
+  - Import `ApiChannel` from `antkeeper.channels.api`.
+  - Import `Runner` from `antkeeper.core.runner`.
+  - Import `WorkflowFailedError` from `antkeeper.core.domain`.
   - Define Pydantic models:
     - `WebhookRequest(BaseModel)` with `workflow_name: str` and `initial_state: dict[str, Any] = {}`.
     - `WebhookResponse(BaseModel)` with `run_id: str`.
@@ -148,9 +148,9 @@ types:
     - Creates `FastAPI()` instance.
     - Defines `POST /webhook` endpoint inside the factory:
       - Accepts `WebhookRequest` body and `BackgroundTasks`.
-      - Validates workflow exists: call `anthill_app.get_handler(request.workflow_name)`. If `ValueError` raised, return `HTTPException(status_code=404, detail=f"Unknown workflow: {request.workflow_name}")`.
+      - Validates workflow exists: call `antkeeper_app.get_handler(request.workflow_name)`. If `ValueError` raised, return `HTTPException(status_code=404, detail=f"Unknown workflow: {request.workflow_name}")`.
       - Creates `ApiChannel(request.workflow_name, request.initial_state)`.
-      - Creates `Runner(anthill_app, channel)`.
+      - Creates `Runner(antkeeper_app, channel)`.
       - Adds `_run_workflow(runner)` as background task.
       - Returns `WebhookResponse(run_id=runner.id)`.
     - Returns the FastAPI instance.
@@ -158,13 +158,13 @@ types:
 
 ### Step 7: Add server CLI subcommand
 
-- In `src/anthill/cli.py`:
+- In `src/antkeeper/cli.py`:
   - Add `server` subparser: `server_parser = subparsers.add_parser("server")`.
   - Add arguments: `--host` (default `"127.0.0.1"`), `--port` (type=int, default `8000`), `--reload` (action `"store_true"`), `--agents-file` (default `"handlers.py"`).
   - In the command dispatch block, add `elif args.command == "server":`.
   - Import uvicorn inside the block: `import uvicorn`.
-  - Call `uvicorn.run("anthill.server:app", host=args.host, port=args.port, reload=args.reload)`.
-  - Note: `--agents-file` for the server subcommand needs to reach `create_app()`. Use an environment variable: `os.environ["ANTHILL_AGENTS_FILE"] = args.agents_file` before calling `uvicorn.run()`. Update `create_app()` default: `create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handlers.py"))`.
+  - Call `uvicorn.run("antkeeper.server:app", host=args.host, port=args.port, reload=args.reload)`.
+  - Note: `--agents-file` for the server subcommand needs to reach `create_app()`. Use an environment variable: `os.environ["ANTKEEPER_AGENTS_FILE"] = args.agents_file` before calling `uvicorn.run()`. Update `create_app()` default: `create_app(agents_file: str = os.environ.get("ANTKEEPER_AGENTS_FILE", "handlers.py"))`.
 
 ### Step 8: Write ApiChannel tests
 
@@ -211,13 +211,13 @@ types:
 
 ## Acceptance Criteria
 
-- `WorkflowFailedError` is defined in `src/anthill/core/domain.py`.
+- `WorkflowFailedError` is defined in `src/antkeeper/core/domain.py`.
 - `Runner.fail()` raises `WorkflowFailedError` instead of calling `exit(1)`.
 - CLI `run` command catches `WorkflowFailedError`, prints to stderr, exits 1 (same observable behaviour as before).
 - `ApiChannel` implements the Channel protocol with `type="api"` and print-based reporting.
 - `POST /webhook` accepts `workflow_name` and `initial_state`, returns `run_id`, runs workflow in background.
 - `POST /webhook` returns 404 for unknown workflow names.
-- `anthill server` starts uvicorn with `--host`, `--port`, `--reload`, `--agents-file` options.
+- `antkeeper server` starts uvicorn with `--host`, `--port`, `--reload`, `--agents-file` options.
 - All existing tests pass (with `test_failure` updated for new exception type).
 - New tests pass for ApiChannel, server endpoint, and CLI error handling.
 - Type checks pass.
@@ -246,8 +246,8 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Notes
 
-- **BackgroundTasks limitation**: FastAPI's `BackgroundTasks` runs in the same process after the response. For long-running workflows, this blocks a worker thread. This is acceptable for the initial implementation; production deployments can use `uvicorn anthill.server:app` with multiple workers.
-- **Agents file propagation**: The `--agents-file` CLI option is passed to `create_app()` via the `ANTHILL_AGENTS_FILE` environment variable, since `uvicorn.run()` imports the module string `"anthill.server:app"` and the factory needs the path at import time.
+- **BackgroundTasks limitation**: FastAPI's `BackgroundTasks` runs in the same process after the response. For long-running workflows, this blocks a worker thread. This is acceptable for the initial implementation; production deployments can use `uvicorn antkeeper.server:app` with multiple workers.
+- **Agents file propagation**: The `--agents-file` CLI option is passed to `create_app()` via the `ANTKEEPER_AGENTS_FILE` environment variable, since `uvicorn.run()` imports the module string `"antkeeper.server:app"` and the factory needs the path at import time.
 - **BREAKING CHANGE**: `Runner.fail()` no longer calls `exit(1)`. Any code that caught `SystemExit` from `fail()` must now catch `WorkflowFailedError`. This is intentional and backwards compatibility is explicitly not required.
 - **No module-level logger in ApiChannel**: Per user instruction, ApiChannel uses plain `print()` statements. Output appears in Uvicorn's log stream.
 - **Pydantic models**: Used for `WebhookRequest`/`WebhookResponse` because FastAPI's request validation and OpenAPI docs generation depend on them. Pydantic is a transitive dependency of FastAPI.
@@ -255,4 +255,4 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Report
 
-Files changed: `src/anthill/core/domain.py` (add WorkflowFailedError), `src/anthill/core/runner.py` (fail raises exception), `src/anthill/cli.py` (catch exception + server subcommand), `pyproject.toml` (add fastapi, uvicorn, httpx), `tests/core/test_workflows.py` (update test_failure). Files created: `src/anthill/channels/api.py` (ApiChannel), `src/anthill/server.py` (FastAPI app + webhook endpoint), `tests/channels/test_api_channel.py` (4 tests), `tests/test_server.py` (3 tests). Tests added: 4 ApiChannel unit tests, 3 server endpoint tests, 1 CLI integration test. Validations: pytest, ruff, ty, just.
+Files changed: `src/antkeeper/core/domain.py` (add WorkflowFailedError), `src/antkeeper/core/runner.py` (fail raises exception), `src/antkeeper/cli.py` (catch exception + server subcommand), `pyproject.toml` (add fastapi, uvicorn, httpx), `tests/core/test_workflows.py` (update test_failure). Files created: `src/antkeeper/channels/api.py` (ApiChannel), `src/antkeeper/server.py` (FastAPI app + webhook endpoint), `tests/channels/test_api_channel.py` (4 tests), `tests/test_server.py` (3 tests). Tests added: 4 ApiChannel unit tests, 3 server endpoint tests, 1 CLI integration test. Validations: pytest, ruff, ty, just.

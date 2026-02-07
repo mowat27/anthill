@@ -12,7 +12,7 @@ import subprocess
 
 import pytest
 
-from anthill.git.worktrees import Worktree, WorktreeError, git_worktree
+from antkeeper.git.worktrees import Worktree, WorktreeError, git_worktree
 
 
 class TestGitWorktreeContextManager:

@@ -1,6 +1,6 @@
 # feature: Add git worktree support for isolated workflows
 
-- Add `Worktree` class and `git_worktree` context manager in `anthill.git.worktrees` wrapping git worktree subprocess operations.
+- Add `Worktree` class and `git_worktree` context manager in `antkeeper.git.worktrees` wrapping git worktree subprocess operations.
 - Add `worktree_dir` to `App` constructor (default `trees/`) and `sdlc_iso` composite workflow using worktrees.
 - Context manager guarantees cwd restore via try/finally, optionally creates/removes worktrees, fails noisily on missing worktree.
 
@@ -12,12 +12,12 @@ After this change, handlers can isolate workflow execution inside git worktrees.
 
 **CLI usage (new workflow):**
 ```
-anthill run sdlc_iso --model opus --prompt "Add dark mode toggle"
+antkeeper run sdlc_iso --model opus --prompt "Add dark mode toggle"
 ```
 
 **Handler composition example:**
 ```python
-from anthill.git.worktrees import Worktree, git_worktree
+from antkeeper.git.worktrees import Worktree, git_worktree
 
 wt = Worktree(base_dir=runner.app.worktree_dir, name="20260207-a1b2c3d4")
 with git_worktree(wt, create=True, branch="feature/dark-mode", remove=False) as wt:
@@ -68,9 +68,9 @@ types:
 
 ## Relevant Files
 
-- `src/anthill/core/app.py` — Add `worktree_dir` parameter to `App.__init__`. Store as `self.worktree_dir`.
-- `src/anthill/llm/claude_code.py` — Reference for subprocess + error handling pattern (`subprocess.run`, check `returncode`, raise custom error with stderr).
-- `src/anthill/helpers/json.py` — `extract_json()` used by `derive_feature` handler.
+- `src/antkeeper/core/app.py` — Add `worktree_dir` parameter to `App.__init__`. Store as `self.worktree_dir`.
+- `src/antkeeper/llm/claude_code.py` — Reference for subprocess + error handling pattern (`subprocess.run`, check `returncode`, raise custom error with stderr).
+- `src/antkeeper/helpers/json.py` — `extract_json()` used by `derive_feature` handler.
 - `handlers.py` — Add `derive_feature` handler and `sdlc_iso` composite workflow.
 - `tests/conftest.py` — Update `app` fixture to pass `worktree_dir=tempfile.mkdtemp()`.
 - `tests/core/test_logging.py` — Add `App(worktree_dir=...)` configuration tests to existing `TestAppConfiguration`.
@@ -78,8 +78,8 @@ types:
 
 ### New Files
 
-- `src/anthill/git/__init__.py` — Re-export `Worktree`, `WorktreeError`, `git_worktree` from `anthill.git.worktrees`.
-- `src/anthill/git/worktrees.py` — `WorktreeError`, `Worktree` class, `git_worktree` context manager.
+- `src/antkeeper/git/__init__.py` — Re-export `Worktree`, `WorktreeError`, `git_worktree` from `antkeeper.git.worktrees`.
+- `src/antkeeper/git/worktrees.py` — `WorktreeError`, `Worktree` class, `git_worktree` context manager.
 - `.claude/commands/derive_feature.md` — Slash command that derives feature type and slug from a prompt.
 - `tests/git/__init__.py` — Empty test package init.
 - `tests/git/conftest.py` — `git_repo` fixture for real git operations in tests.
@@ -90,18 +90,18 @@ types:
 
 ### Step 1: Add `worktree_dir` to App
 
-- In `src/anthill/core/app.py`, add `worktree_dir: str = "trees/"` parameter to `App.__init__`.
+- In `src/antkeeper/core/app.py`, add `worktree_dir: str = "trees/"` parameter to `App.__init__`.
 - Store as `self.worktree_dir = worktree_dir`.
 - No other changes to core.
 
 ### Step 2: Create git package and worktrees module
 
-- Create `src/anthill/git/__init__.py` that re-exports `Worktree`, `WorktreeError`, `git_worktree` from `.worktrees`.
-- Create `src/anthill/git/worktrees.py` containing all three components:
+- Create `src/antkeeper/git/__init__.py` that re-exports `Worktree`, `WorktreeError`, `git_worktree` from `.worktrees`.
+- Create `src/antkeeper/git/worktrees.py` containing all three components:
 
 **`WorktreeError`**: Simple exception class inheriting from `Exception`.
 
-**Module-level logger**: `logger = logging.getLogger("anthill.git.worktrees")` — follow the pattern in `llm/claude_code.py`.
+**Module-level logger**: `logger = logging.getLogger("antkeeper.git.worktrees")` — follow the pattern in `llm/claude_code.py`.
 
 **`Worktree` class**:
 - `__init__(self, base_dir: str, name: str)` — Stores `self.base_dir = os.path.abspath(base_dir)`, `self.name = name`, computes `self.path = os.path.abspath(os.path.join(base_dir, name))`.
@@ -184,9 +184,9 @@ Key behaviors:
   sdlc_iso prompt model="opus":
     #!/usr/bin/env bash
     if [ -f "{{prompt}}" ]; then
-      uv run anthill run sdlc_iso --model {{model}} --prompt-file "{{prompt}}"
+      uv run antkeeper run sdlc_iso --model {{model}} --prompt-file "{{prompt}}"
     else
-      uv run anthill run sdlc_iso --model {{model}} --prompt "{{prompt}}"
+      uv run antkeeper run sdlc_iso --model {{model}} --prompt "{{prompt}}"
     fi
   ```
 
@@ -299,14 +299,14 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Notes
 
-- **Package structure**: `src/anthill/git/` with `__init__.py` and `worktrees.py` as specified by the user. The `__init__.py` re-exports for convenience (`from anthill.git.worktrees import ...`).
+- **Package structure**: `src/antkeeper/git/` with `__init__.py` and `worktrees.py` as specified by the user. The `__init__.py` re-exports for convenience (`from antkeeper.git.worktrees import ...`).
 - **os.chdir is process-wide**: The context manager uses `os.chdir()` which changes the process working directory. This is appropriate for the current single-threaded execution model.
 - **Errors propagate**: `Worktree.create()` and `Worktree.remove()` raise `WorktreeError` wrapping git stderr. Handler-level errors (missing state keys, git failures) propagate to the Runner per the framework's philosophy.
 - **Branch creation**: `git worktree add -b <branch>` creates a NEW branch. If the branch already exists, git will error — this is intentional.
 - **Worktree naming**: Uses the same pattern as log files (`{YYYYMMDDHHmmSS}-{run_id}`) for correlation and uniqueness.
 - **No branch handler in sdlc_iso**: The `[specify, implement, document]` pipeline omits `branch` because the worktree creation already handles branch creation.
-- **Module-level logging**: `anthill.git.worktrees` has a module-level logger following the pattern in `llm/claude_code.py`. Logs worktree creation, removal, and context manager entry/exit.
+- **Module-level logging**: `antkeeper.git.worktrees` has a module-level logger following the pattern in `llm/claude_code.py`. Logs worktree creation, removal, and context manager entry/exit.
 
 ## Report
 
-Files changed: `src/anthill/core/app.py` (add `worktree_dir` param), `handlers.py` (add `derive_feature` + `sdlc_iso`), `tests/conftest.py` (update `app` fixture), `tests/core/test_logging.py` (add App config tests), `justfile` (add recipe). Files created: `src/anthill/git/__init__.py` (re-exports), `src/anthill/git/worktrees.py` (Worktree class, context manager, WorktreeError), `.claude/commands/derive_feature.md` (slash command), `tests/git/__init__.py`, `tests/git/conftest.py` (git_repo fixture), `tests/git/test_worktree.py`, `tests/git/test_context.py`. Tests added: 2 App config, 8 Worktree class, 10 context manager. Validations: pytest, ruff, ty.
+Files changed: `src/antkeeper/core/app.py` (add `worktree_dir` param), `handlers.py` (add `derive_feature` + `sdlc_iso`), `tests/conftest.py` (update `app` fixture), `tests/core/test_logging.py` (add App config tests), `justfile` (add recipe). Files created: `src/antkeeper/git/__init__.py` (re-exports), `src/antkeeper/git/worktrees.py` (Worktree class, context manager, WorktreeError), `.claude/commands/derive_feature.md` (slash command), `tests/git/__init__.py`, `tests/git/conftest.py` (git_repo fixture), `tests/git/test_worktree.py`, `tests/git/test_context.py`. Tests added: 2 App config, 8 Worktree class, 10 context manager. Validations: pytest, ruff, ty.

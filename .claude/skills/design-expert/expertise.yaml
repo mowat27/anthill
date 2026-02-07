@@ -1,9 +1,9 @@
-# Anthill Framework - Design Expertise
-# Mental model for the anthill workflow engine
+# Antkeeper Framework - Design Expertise
+# Mental model for the antkeeper workflow engine
 # Last validated: 2026-02-07
 
 overview:
-  name: anthill
+  name: antkeeper
   purpose: >
     Lightweight Python workflow engine. Users define handlers (workflow steps)
     via a decorator-based App, wire them to a Channel (I/O boundary), and
@@ -11,7 +11,7 @@ overview:
     Supports CLI, HTTP API, and Slack-triggered execution.
   python: ">=3.12"
   build: uv (uv_build backend)
-  entry_point: "anthill.cli:main"
+  entry_point: "antkeeper.cli:main"
   dependencies:
     - ruff (lint)
     - ty (type-check)
@@ -25,7 +25,7 @@ overview:
   justfile_recipes:
     - "sdlc prompt model='opus' — runs sdlc workflow, auto-detects --prompt vs --prompt-file"
     - "sdlc_iso prompt model='opus' — runs sdlc_iso workflow (worktree-isolated), same prompt detection"
-    - "server — runs anthill server with default settings"
+    - "server — runs antkeeper server with default settings"
     - "check_api host port — curl POST to /webhook for healthcheck"
 
 architecture:
@@ -43,7 +43,7 @@ architecture:
     - "Edge validation (e.g. missing CLI params) can be handled and reported only when a stack trace adds no value."
   layers:
     - name: core
-      path: src/anthill/core/
+      path: src/antkeeper/core/
       responsibility: >
         Framework kernel. Contains domain types, the App handler registry,
         the Runner execution engine, and the run_workflow composition helper.
@@ -53,7 +53,7 @@ architecture:
         - runner.py
 
     - name: channels
-      path: src/anthill/channels/
+      path: src/antkeeper/channels/
       responsibility: >
         I/O boundary adapters. Each channel satisfies the Channel protocol
         and owns how progress/errors are reported and what initial state is
@@ -64,7 +64,7 @@ architecture:
         - slack.py  # SlackChannel for Slack thread-based execution
 
     - name: llm
-      path: src/anthill/llm/
+      path: src/antkeeper/llm/
       responsibility: >
         LLM agent abstraction layer. Defines the Agent protocol for LLM
         interactions and provides concrete implementations (ClaudeCodeAgent).
@@ -75,7 +75,7 @@ architecture:
         - claude_code.py  # ClaudeCodeAgent (subprocess-based)
 
     - name: git
-      path: src/anthill/git/
+      path: src/antkeeper/git/
       responsibility: >
         Git integration layer. Provides worktree management for isolated
         workflow execution. Handlers use git worktrees to run SDLC steps
@@ -85,7 +85,7 @@ architecture:
         - worktrees.py    # Worktree class, WorktreeError, git_worktree context manager
 
     - name: helpers
-      path: src/anthill/helpers/
+      path: src/antkeeper/helpers/
       responsibility: >
         Shared utility functions. Currently contains JSON extraction for
         parsing LLM responses that embed JSON in markdown or prose.
@@ -93,7 +93,7 @@ architecture:
         - json.py  # extract_json — finds first {…} in text, parses as JSON
 
     - name: http
-      path: src/anthill/http/
+      path: src/antkeeper/http/
       responsibility: >
         HTTP endpoint logic extracted from server.py. __init__.py provides
         run_workflow_background shared helper. webhook.py exports handle_webhook
@@ -105,7 +105,7 @@ architecture:
         - slack_events.py  # SlackEventProcessor class with debounce timer, pending store
 
     - name: cli
-      path: src/anthill/cli.py
+      path: src/antkeeper/cli.py
       responsibility: >
         Argparse-based CLI entry point. Loads a user-supplied agents file
         (Python module exporting `app`), builds a CliChannel, and runs
@@ -113,17 +113,17 @@ architecture:
         uvicorn for HTTP API access.
 
     - name: server
-      path: src/anthill/server.py
+      path: src/antkeeper/server.py
       responsibility: >
         FastAPI server orchestrator. Loads .env via python-dotenv, loads
-        anthill App from agents file, creates FastAPI instance, defines
+        antkeeper App from agents file, creates FastAPI instance, defines
         routes inline (@api.post), and delegates logic to http/webhook.py
         (handle_webhook) and http/slack_events.py (SlackEventProcessor).
         Module-level app = create_app() for uvicorn import.
 
   logging: >
     File-based per-run logging via Python stdlib logging. Runner creates a
-    per-run logger (anthill.run.<id>) writing to <app.log_dir>/<timestamp>-<id>.log.
+    per-run logger (antkeeper.run.<id>) writing to <app.log_dir>/<timestamp>-<id>.log.
     Module-level loggers exist in cli.py, channels/cli.py, llm/claude_code.py,
     and git/worktrees.py for debug tracing. No console logging by default —
     all framework logs go to files.
@@ -139,7 +139,7 @@ architecture:
 
 domain_types:
   WorkflowFailedError:
-    file: src/anthill/core/domain.py
+    file: src/antkeeper/core/domain.py
     definition: "class WorkflowFailedError(Exception)"
     notes: >
       Raised by Runner.fail() to signal workflow failure. Replaces the previous
@@ -147,14 +147,14 @@ domain_types:
       catches it silently (already logged by Runner).
 
   State:
-    file: src/anthill/core/domain.py
+    file: src/antkeeper/core/domain.py
     definition: "type State = dict[str, Any]"
     notes: >
       Type alias. All workflow state is a flat string-keyed dict. Handlers
       receive and return State; Runner injects run_id and workflow_name.
 
   Channel:
-    file: src/anthill/core/domain.py
+    file: src/antkeeper/core/domain.py
     definition: Protocol
     attributes:
       - "type: str"
@@ -169,9 +169,9 @@ domain_types:
 
 core_objects:
   App:
-    file: src/anthill/core/app.py
+    file: src/antkeeper/core/app.py
     responsibility: Handler registry keyed by function name.
-    construction: "App(log_dir: str = 'agents/logs/', worktree_dir: str = 'trees/', state_dir: str = '.anthill/state/')"
+    construction: "App(log_dir: str = 'agents/logs/', worktree_dir: str = 'trees/', state_dir: str = '.antkeeper/state/')"
     attributes:
       - "handlers: dict  # name -> fn mapping"
       - "log_dir: str  # directory for per-run log files"
@@ -188,7 +188,7 @@ core_objects:
       passed to Runner for per-run state JSON persistence.
 
   Runner:
-    file: src/anthill/core/runner.py
+    file: src/antkeeper/core/runner.py
     responsibility: >
       Execution engine. Binds an App + Channel, generates a run id, sets up
       per-run file logging, and drives the workflow lifecycle.
@@ -197,7 +197,7 @@ core_objects:
       - "id: str  # uuid4 hex[:8]"
       - "channel: Channel"
       - "app: App"
-      - "logger: logging.Logger  # per-run file logger (anthill.run.<id>)"
+      - "logger: logging.Logger  # per-run file logger (antkeeper.run.<id>)"
       - "_state_path: str  # absolute path to per-run state JSON file"
     interface:
       - "run() -> State  # merges channel.initial_state with run_id/workflow_name, persists state before/after workflow, calls workflow"
@@ -219,7 +219,7 @@ core_objects:
       to handle failures differently (CLI exits, API continues serving).
 
   run_workflow:
-    file: src/anthill/core/app.py
+    file: src/antkeeper/core/app.py
     signature: "run_workflow(runner: Runner, state: State, steps: list[Callable]) -> State"
     responsibility: >
       Sequential composition helper. Folds state through a list of handler
@@ -229,14 +229,14 @@ core_objects:
 
 git_objects:
   WorktreeError:
-    file: src/anthill/git/worktrees.py
+    file: src/antkeeper/git/worktrees.py
     definition: "class WorktreeError(Exception)"
     notes: >
       Raised when a git worktree operation fails (create, remove, or
       entering a non-existent worktree).
 
   Worktree:
-    file: src/anthill/git/worktrees.py
+    file: src/antkeeper/git/worktrees.py
     responsibility: >
       Represents a git worktree on disk. Wraps git worktree subprocess
       operations for creating and removing worktrees.
@@ -253,10 +253,10 @@ git_objects:
       Paths are always resolved via os.path.realpath for consistency.
       create() uses os.makedirs(exist_ok=True) for the base directory.
       Both create() and remove() raise WorktreeError on non-zero git exit.
-      Logging via module-level logger (anthill.git.worktrees).
+      Logging via module-level logger (antkeeper.git.worktrees).
 
   git_worktree:
-    file: src/anthill/git/worktrees.py
+    file: src/antkeeper/git/worktrees.py
     signature: "git_worktree(worktree, *, create=False, branch=None, remove=False) -> Generator[Worktree]"
     responsibility: >
       Context manager that enters a git worktree directory. Guarantees cwd
@@ -274,7 +274,7 @@ git_objects:
 
 llm_types:
   Agent:
-    file: src/anthill/llm/__init__.py
+    file: src/antkeeper/llm/__init__.py
     definition: Protocol
     methods:
       - "prompt(prompt: str) -> str"
@@ -283,14 +283,14 @@ llm_types:
       qualifies. This is the extension point for adding new LLM backends.
 
   AgentExecutionError:
-    file: src/anthill/llm/errors.py
+    file: src/antkeeper/llm/errors.py
     definition: "class AgentExecutionError(Exception)"
     notes: >
       Raised when an agent fails to execute a prompt (non-zero exit,
       missing binary, etc.).
 
   ClaudeCodeAgent:
-    file: src/anthill/llm/claude_code.py
+    file: src/antkeeper/llm/claude_code.py
     satisfies: Agent protocol
     construction: "ClaudeCodeAgent(model: str | None = None)"
     behavior:
@@ -304,7 +304,7 @@ llm_types:
 
 channel_implementations:
   CliChannel:
-    file: src/anthill/channels/cli.py
+    file: src/antkeeper/channels/cli.py
     satisfies: Channel protocol
     construction: "CliChannel(workflow_name: str, initial_state: dict[str,str] | None = None)"
     behavior:
@@ -314,7 +314,7 @@ channel_implementations:
       report_error: "Delegates to report_progress with file=sys.stderr"
 
   ApiChannel:
-    file: src/anthill/channels/api.py
+    file: src/antkeeper/channels/api.py
     satisfies: Channel protocol
     construction: "ApiChannel(workflow_name: str, initial_state: dict[str,str] | None = None)"
     behavior:
@@ -327,7 +327,7 @@ channel_implementations:
       Designed for FastAPI server where output goes to Uvicorn logs.
 
   SlackChannel:
-    file: src/anthill/channels/slack.py
+    file: src/antkeeper/channels/slack.py
     satisfies: Channel protocol
     construction: "SlackChannel(workflow_name: str, initial_state: State | None = None, *, slack_token: str, channel_id: str, thread_ts: str)"
     behavior:
@@ -343,7 +343,7 @@ channel_implementations:
       @mention event.
 
 cli_entry_point:
-  file: src/anthill/cli.py
+  file: src/antkeeper/cli.py
   shared_functions:
     - "load_app(path: str) -> App  # dynamically imports module, extracts app attr"
     - "parse_state_pairs(pairs: list[str]) -> dict[str, str]  # splits key=val strings"
@@ -382,28 +382,28 @@ cli_entry_point:
         - "--reload (flag) — enable uvicorn auto-reload"
         - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
       flow: >
-        1. Sets ANTHILL_AGENTS_FILE environment variable to args.agents_file
-        2. Calls uvicorn.run("anthill.server:app", host, port, reload)
-        3. Uvicorn imports anthill.server module and loads the app object
+        1. Sets ANTKEEPER_AGENTS_FILE environment variable to args.agents_file
+        2. Calls uvicorn.run("antkeeper.server:app", host, port, reload)
+        3. Uvicorn imports antkeeper.server module and loads the app object
       notes: >
         The --agents-file is propagated to create_app() via environment variable
-        because uvicorn.run() imports the module string "anthill.server:app" and
+        because uvicorn.run() imports the module string "antkeeper.server:app" and
         the factory needs the path at import time.
 
   no_subcommand: "Prints help and exits 0"
 
 server_module:
-  file: src/anthill/server.py
+  file: src/antkeeper/server.py
   purpose: >
-    FastAPI server orchestrator. Loads .env, loads anthill App, creates
+    FastAPI server orchestrator. Loads .env, loads antkeeper App, creates
     FastAPI, defines routes inline, delegates logic to http/ package.
   functions:
     create_app:
-      signature: "create_app(agents_file: str = os.environ.get('ANTHILL_AGENTS_FILE', 'handlers.py')) -> FastAPI"
+      signature: "create_app(agents_file: str = os.environ.get('ANTKEEPER_AGENTS_FILE', 'handlers.py')) -> FastAPI"
       responsibility: >
         1. dotenv.load_dotenv()
-        2. load_app(agents_file) -> anthill App
-        3. Creates FastAPI + SlackEventProcessor(anthill_app)
+        2. load_app(agents_file) -> antkeeper App
+        3. Creates FastAPI + SlackEventProcessor(antkeeper_app)
         4. Defines @api.post("/webhook") -> delegates to handle_webhook
         5. Defines @api.post("/slack_event") -> delegates to slack.handle_event
         6. Returns configured FastAPI
@@ -412,7 +412,7 @@ server_module:
 
 http_modules:
   init:
-    file: src/anthill/http/__init__.py
+    file: src/antkeeper/http/__init__.py
     function: "run_workflow_background(runner: Runner) -> None"
     behavior: >
       Shared background task helper. Catches WorkflowFailedError silently,
@@ -420,11 +420,11 @@ http_modules:
       slack_events.py.
 
   webhook:
-    file: src/anthill/http/webhook.py
+    file: src/antkeeper/http/webhook.py
     types:
       WebhookRequest: "pydantic.BaseModel — workflow_name: str, initial_state: dict = {}"
       WebhookResponse: "pydantic.BaseModel — run_id: str"
-    function: "async handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, anthill_app: App) -> WebhookResponse"
+    function: "async handle_webhook(request: WebhookRequest, background_tasks: BackgroundTasks, antkeeper_app: App) -> WebhookResponse"
     behavior: >
       Validates workflow via get_handler (404 if missing), creates
       ApiChannel + Runner, schedules run_workflow_background as background
@@ -432,7 +432,7 @@ http_modules:
       route handler.
 
   slack_events:
-    file: src/anthill/http/slack_events.py
+    file: src/antkeeper/http/slack_events.py
     helpers:
       - "is_bot_message(event) -> bool  # checks event.get('bot_id')"
       - "is_bot_mention(text, bot_user_id) -> bool  # checks <@BOT_ID> in text"
@@ -444,9 +444,9 @@ http_modules:
     async_helpers:
       slack_api: "async slack_api(token, method, payload) -> dict  # httpx.AsyncClient POST to Slack API"
     class: SlackEventProcessor
-    construction: "SlackEventProcessor(anthill_app: App)"
+    construction: "SlackEventProcessor(antkeeper_app: App)"
     attributes:
-      - "_app: App  # anthill app with registered handlers"
+      - "_app: App  # antkeeper app with registered handlers"
       - "_pending: dict[tuple[str, str], PendingMessage]  # instance-scoped pending store"
     methods:
       - "async handle_event(body: dict) -> dict  # main event router"
@@ -704,7 +704,7 @@ key_design_decisions:
     configured FastAPI instance. This makes testing possible — tests call
     create_app() with custom agents file. Module-level app = create_app()
     provides default instance for uvicorn to import. The --agents-file CLI
-    option is propagated via ANTHILL_AGENTS_FILE environment variable.
+    option is propagated via ANTKEEPER_AGENTS_FILE environment variable.
   - >
     Server as thin orchestrator. server.py defines routes inline and
     delegates to http/ package: handle_webhook (webhook.py) and
@@ -732,5 +732,5 @@ key_design_decisions:
     workflow, after each run_workflow step, and after completion. State
     and log files share the same <timestamp>-<id> base name for
     correlation. App.state_dir configures the directory (default
-    ".anthill/state/"). This enables debugging and mid-workflow recovery
+    ".antkeeper/state/"). This enables debugging and mid-workflow recovery
     without handlers needing explicit persistence logic.

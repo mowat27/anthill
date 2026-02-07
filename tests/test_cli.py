@@ -11,7 +11,7 @@ import textwrap
 
 import pytest
 
-from anthill.cli import main, parse_state_pairs
+from antkeeper.cli import main, parse_state_pairs
 
 
 class TestParseStatePairs:
@@ -96,8 +96,8 @@ class TestCliIntegration:
         """Test end-to-end CLI execution with dynamic handler loading from file."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
-            from anthill.core.app import App
-            from anthill.core.domain import State
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
 
             app = App(log_dir="{log_dir}")
 
@@ -112,7 +112,7 @@ class TestCliIntegration:
 
         try:
             monkeypatch.setattr("sys.argv", [
-                "anthill", "run",
+                "antkeeper", "run",
                 "--agents-file", agents_path,
                 "--initial-state", "result=10",
                 "add_1",
@@ -127,8 +127,8 @@ class TestCliIntegration:
         """Test that --prompt-file reads file contents into state['prompt']."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
-            from anthill.core.app import App
-            from anthill.core.domain import State
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
 
             app = App(log_dir="{log_dir}")
 
@@ -149,7 +149,7 @@ class TestCliIntegration:
 
         try:
             monkeypatch.setattr("sys.argv", [
-                "anthill", "run",
+                "antkeeper", "run",
                 "--agents-file", agents_path,
                 "--prompt-file", prompt_path,
                 "echo",
@@ -165,8 +165,8 @@ class TestCliIntegration:
         """Test that --prompt-file with nonexistent path prints error and exits 1."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
-            from anthill.core.app import App
-            from anthill.core.domain import State
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
 
             app = App(log_dir="{log_dir}")
 
@@ -181,7 +181,7 @@ class TestCliIntegration:
 
         try:
             monkeypatch.setattr("sys.argv", [
-                "anthill", "run",
+                "antkeeper", "run",
                 "--agents-file", agents_path,
                 "--prompt-file", "/nonexistent/path/prompt.md",
                 "echo",
@@ -198,8 +198,8 @@ class TestCliIntegration:
         """Test that --prompt and --model flags are merged into handler state."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
-            from anthill.core.app import App
-            from anthill.core.domain import State
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
 
             app = App(log_dir="{log_dir}")
 
@@ -214,7 +214,7 @@ class TestCliIntegration:
 
         try:
             monkeypatch.setattr("sys.argv", [
-                "anthill", "run",
+                "antkeeper", "run",
                 "--agents-file", agents_path,
                 "--prompt", "hello world",
                 "--model", "opus",
@@ -231,8 +231,8 @@ class TestCliIntegration:
         """Test that CLI run catches WorkflowFailedError, prints to stderr, exits 1."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
-            from anthill.core.app import App
-            from anthill.core.domain import State
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
 
             app = App(log_dir="{log_dir}")
 
@@ -248,7 +248,7 @@ class TestCliIntegration:
 
         try:
             monkeypatch.setattr("sys.argv", [
-                "anthill", "run",
+                "antkeeper", "run",
                 "--agents-file", agents_path,
                 "blow_up",
             ])

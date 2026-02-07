@@ -1,6 +1,6 @@
 # feature: Add CLI with argparse and refactor Channel interface
 
-- Add `anthill` CLI entry point with `run` subcommand using argparse, defaulting agents file to `handlers.py`.
+- Add `antkeeper` CLI entry point with `run` subcommand using argparse, defaulting agents file to `handlers.py`.
 - Break Channel protocol: add `initial_state` so Channels own state construction, simplifying Runner.
 - Rename `main.py` to `handlers.py`, strip CLI logic; CLI module dynamically loads the agents file.
 
@@ -14,7 +14,7 @@ After this change, Channels are responsible for providing initial state to the R
 
 **CLI usage:**
 ```
-anthill run [--agents-file=handlers.py] [--initial-state key=val ...] PROMPT
+antkeeper run [--agents-file=handlers.py] [--initial-state key=val ...] PROMPT
 ```
 
 Where `PROMPT` is the workflow/handler name to execute (e.g., `plus_1_times_2`).
@@ -68,29 +68,29 @@ types:
 
 ## Relevant Files
 
-- `src/anthill/core/domain.py` — Add `initial_state: State` to Channel protocol.
-- `src/anthill/core/runner.py` — Change `Runner.run()` to read `initial_state` from `self.channel` instead of accepting it as a parameter. Framework keys (`run_id`, `workflow_name`) must take precedence over channel-provided state.
-- `src/anthill/channels/cli.py` — Rewrite CliChannel constructor to accept `workflow_name` and `initial_state` dict. Build `initial_state` in `__init__`. Hardcode `type = "cli"`.
+- `src/antkeeper/core/domain.py` — Add `initial_state: State` to Channel protocol.
+- `src/antkeeper/core/runner.py` — Change `Runner.run()` to read `initial_state` from `self.channel` instead of accepting it as a parameter. Framework keys (`run_id`, `workflow_name`) must take precedence over channel-provided state.
+- `src/antkeeper/channels/cli.py` — Rewrite CliChannel constructor to accept `workflow_name` and `initial_state` dict. Build `initial_state` in `__init__`. Hardcode `type = "cli"`.
 - `main.py` — Delete (content moves to `handlers.py`).
-- `pyproject.toml` — Add `[project.scripts]` entry point for `anthill` command.
+- `pyproject.toml` — Add `[project.scripts]` entry point for `antkeeper` command.
 - `tests/conftest.py` — Rename `TestMissionSource` to `TestChannel`. Add `initial_state` field. Update `runner_factory` fixture.
 - `tests/test_workflows.py` — Update all tests to pass `initial_state` through the test channel instead of `runner.run()`.
 
 ### New Files
 
-- `src/anthill/cli.py` — New CLI module using argparse with `run` subcommand.
+- `src/antkeeper/cli.py` — New CLI module using argparse with `run` subcommand.
 - `handlers.py` — Renamed from `main.py`. Contains only the `App` instance and handler definitions. No CLI logic, no `main()`, no `__main__` block.
 
 ## Workflow
 
 ### Step 1: Update Channel protocol
 
-- Add `initial_state: State` to the `Channel` protocol in `src/anthill/core/domain.py`.
+- Add `initial_state: State` to the `Channel` protocol in `src/antkeeper/core/domain.py`.
 - This is the foundational change that all other changes depend on.
 
 ### Step 2: Update Runner.run()
 
-- Change `Runner.run()` in `src/anthill/core/runner.py` to take no arguments.
+- Change `Runner.run()` in `src/antkeeper/core/runner.py` to take no arguments.
 - Read `self.channel.initial_state` and merge with framework keys.
 - **Merge order**: framework keys (`run_id`, `workflow_name`) must override anything in `initial_state`. Use: `state = {**self.channel.initial_state, "run_id": self.id, "workflow_name": self.workflow_name}`.
 - The new signature: `def run(self) -> State`.
@@ -104,7 +104,7 @@ types:
 
 ### Step 4: Create the CLI module
 
-- Create `src/anthill/cli.py` with a `main()` function as the entry point.
+- Create `src/antkeeper/cli.py` with a `main()` function as the entry point.
 - Use `argparse.ArgumentParser` with `subparsers` for the `run` subcommand.
 - `run` subcommand args:
   - `--agents-file` (default: `handlers.py`) — path to Python file containing `app` object.
@@ -120,7 +120,7 @@ types:
 
 ### Step 5: Add entry point to pyproject.toml
 
-- Add `[project.scripts]` section: `anthill = "anthill.cli:main"`.
+- Add `[project.scripts]` section: `antkeeper = "antkeeper.cli:main"`.
 
 ### Step 6: Rename main.py to handlers.py
 
@@ -151,8 +151,8 @@ result = runner.run()
 ### Step 8: Run validation commands
 
 - Run all tests, type checks, and linting.
-- Verify `anthill run --help` works.
-- Verify `anthill run --initial-state result=10 plus_1_times_2_times_2` works with handlers.py.
+- Verify `antkeeper run --help` works.
+- Verify `antkeeper run --initial-state result=10 plus_1_times_2_times_2` works with handlers.py.
 
 ## Testing Strategy
 
@@ -185,16 +185,16 @@ result = runner.run()
 
 ## Acceptance Criteria
 
-- `anthill run --help` prints usage showing `--agents-file`, `--initial-state`, and `PROMPT`.
-- `anthill run --initial-state result=10 plus_1_times_2_times_2` executes the workflow from `handlers.py` and prints the result.
-- `anthill run --agents-file=handlers.py --initial-state result=5 plus_1` works.
+- `antkeeper run --help` prints usage showing `--agents-file`, `--initial-state`, and `PROMPT`.
+- `antkeeper run --initial-state result=10 plus_1_times_2_times_2` executes the workflow from `handlers.py` and prints the result.
+- `antkeeper run --agents-file=handlers.py --initial-state result=5 plus_1` works.
 - `CliChannel` constructs `initial_state` from state dict.
 - `Runner.run()` accepts no arguments; reads `initial_state` from channel.
 - `Channel` protocol includes `initial_state: State`.
 - All existing tests pass (updated for new interface).
 - New unit tests for CliChannel and CLI parsing pass.
 - `main.py` no longer exists; `handlers.py` contains only app + handlers.
-- `pyproject.toml` has `[project.scripts] anthill = "anthill.cli:main"`.
+- `pyproject.toml` has `[project.scripts] antkeeper = "antkeeper.cli:main"`.
 - Type checks pass (`uv run -m ty check`).
 - Linting passes (`uv run -m ruff check`).
 
@@ -211,10 +211,10 @@ uv run -m ty check
 uv run -m ruff check
 
 # Verify CLI help works (via entry point)
-uv run anthill run --help
+uv run antkeeper run --help
 
 # Verify CLI runs a workflow
-uv run anthill run --initial-state result=10 plus_1_times_2_times_2
+uv run antkeeper run --initial-state result=10 plus_1_times_2_times_2
 ```
 
 IMPORTANT: If any of the checks above fail you must investigate and fix the error. It is not acceptable to simply explain away the problem. You must reach zero errors, zero warnings before you move on. This includes pre-existing issues and other issues that you don't think are related to this bugfix.
@@ -229,4 +229,4 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Report
 
-Files changed: `src/anthill/core/domain.py`, `src/anthill/core/runner.py`, `src/anthill/channels/cli.py`, `pyproject.toml`, `tests/conftest.py`, `tests/test_workflows.py`. Files created: `src/anthill/cli.py`, `handlers.py`, `tests/test_cli_channel.py`, `tests/test_cli.py`. Files deleted: `main.py`. Tests added: 2 CliChannel unit tests, 4 CLI parsing tests, 1 integration test. Validations: pytest, ty check, ruff check, CLI help, CLI workflow execution.
+Files changed: `src/antkeeper/core/domain.py`, `src/antkeeper/core/runner.py`, `src/antkeeper/channels/cli.py`, `pyproject.toml`, `tests/conftest.py`, `tests/test_workflows.py`. Files created: `src/antkeeper/cli.py`, `handlers.py`, `tests/test_cli_channel.py`, `tests/test_cli.py`. Files deleted: `main.py`. Tests added: 2 CliChannel unit tests, 4 CLI parsing tests, 1 integration test. Validations: pytest, ty check, ruff check, CLI help, CLI workflow execution.

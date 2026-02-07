@@ -6,8 +6,8 @@ error handling, and handler resolution.
 
 import pytest
 
-from anthill.core.app import run_workflow
-from anthill.core.domain import State, WorkflowFailedError
+from antkeeper.core.app import run_workflow
+from antkeeper.core.domain import State, WorkflowFailedError
 
 
 class TestWorkflows:

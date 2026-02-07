@@ -1,4 +1,4 @@
-"""Core domain types and protocols for the Anthill framework.
+"""Core domain types and protocols for the Antkeeper framework.
 
 This module defines the fundamental types used throughout the framework:
 - State: Type alias for workflow data (dict[str, Any])

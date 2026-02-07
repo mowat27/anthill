@@ -1,4 +1,4 @@
-"""CLI channel implementation for Anthill workflows.
+"""CLI channel implementation for Antkeeper workflows.
 
 This module provides the CliChannel class, which implements the Channel
 protocol for command-line interface environments. It handles progress
@@ -8,9 +8,9 @@ import logging
 import sys
 from typing import Any
 
-from anthill.core.domain import State
+from antkeeper.core.domain import State
 
-logger = logging.getLogger("anthill.channels.cli")
+logger = logging.getLogger("antkeeper.channels.cli")
 
 
 class CliChannel:

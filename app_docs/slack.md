@@ -1,6 +1,6 @@
 # Slack Integration
 
-Anthill integrates with Slack via the Events API. When a user @mentions the bot in a channel, Anthill collects the message (and any follow-up edits or thread replies within a cooldown window), then dispatches a workflow and posts results back to the originating thread.
+Antkeeper integrates with Slack via the Events API. When a user @mentions the bot in a channel, Antkeeper collects the message (and any follow-up edits or thread replies within a cooldown window), then dispatches a workflow and posts results back to the originating thread.
 
 ## Slack App Configuration
 
@@ -132,7 +132,7 @@ The default cooldown is 30 seconds, configurable via `SLACK_COOLDOWN_SECONDS`.
 
 ## SlackChannel
 
-`SlackChannel` (in `src/anthill/channels/slack.py`) is the I/O boundary that posts workflow output back to the originating Slack thread.
+`SlackChannel` (in `src/antkeeper/channels/slack.py`) is the I/O boundary that posts workflow output back to the originating Slack thread.
 
 ### Construction
 

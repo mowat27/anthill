@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 import httpx
 import pytest
 
-from anthill.channels.slack import SlackChannel
+from antkeeper.channels.slack import SlackChannel
 
 
 class TestSlackChannel:
@@ -32,7 +32,7 @@ class TestSlackChannel:
         channel = self._make_channel(initial_state=initial_state)
         assert channel.initial_state == expected
 
-    @patch("anthill.channels.slack.httpx.Client")
+    @patch("antkeeper.channels.slack.httpx.Client")
     def test_report_progress_posts_to_slack_thread(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -51,7 +51,7 @@ class TestSlackChannel:
             },
         )
 
-    @patch("anthill.channels.slack.httpx.Client")
+    @patch("antkeeper.channels.slack.httpx.Client")
     def test_report_error_posts_error_formatted_message(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -63,7 +63,7 @@ class TestSlackChannel:
         call_args = mock_client.post.call_args
         assert "[ERROR]" in call_args.kwargs["json"]["text"]
 
-    @patch("anthill.channels.slack.httpx.Client")
+    @patch("antkeeper.channels.slack.httpx.Client")
     def test_report_progress_survives_http_failure(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client.post.side_effect = httpx.HTTPError("connection failed")

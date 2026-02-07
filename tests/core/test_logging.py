@@ -10,8 +10,8 @@ import re
 
 import pytest
 
-from anthill.core.app import App, run_workflow
-from anthill.core.domain import State
+from antkeeper.core.app import App, run_workflow
+from antkeeper.core.domain import State
 
 
 class TestAppConfiguration:
@@ -32,9 +32,9 @@ class TestAppConfiguration:
         """Test that App(worktree_dir=...) stores the custom value."""
         assert App(worktree_dir="/tmp/wt").worktree_dir == "/tmp/wt"
 
-    def test_app_state_dir_defaults_to_anthill_state(self):
-        """Test that App().state_dir defaults to '.anthill/state/'."""
-        assert App().state_dir == ".anthill/state/"
+    def test_app_state_dir_defaults_to_antkeeper_state(self):
+        """Test that App().state_dir defaults to '.antkeeper/state/'."""
+        assert App().state_dir == ".antkeeper/state/"
 
     def test_app_state_dir_accepts_custom_value(self):
         """Test that App(state_dir=...) stores the custom value."""
@@ -67,7 +67,7 @@ class TestLogContentAndFormat:
                 line = line.strip()
                 if line:
                     assert re.match(
-                        r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \[\w+\] anthill\..+ - .+",
+                        r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \[\w+\] antkeeper\..+ - .+",
                         line,
                     )
 
@@ -149,7 +149,7 @@ class TestErrorLogging:
 
 
 class TestLoggerIsolation:
-    def test_anthill_logger_does_not_leak_to_stdout(self, app, runner_factory, capsys):
+    def test_antkeeper_logger_does_not_leak_to_stdout(self, app, runner_factory, capsys):
         """Test that log output does not appear in stdout/stderr."""
         @app.handler
         def noop(runner, state: State) -> State:

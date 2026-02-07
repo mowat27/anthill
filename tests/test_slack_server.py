@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from anthill.server import create_app
+from antkeeper.server import create_app
 
 
 @pytest.fixture()
@@ -17,8 +17,8 @@ def slack_client():
     log_dir = tempfile.mkdtemp()
     state_dir = tempfile.mkdtemp()
     agents_code = textwrap.dedent(f"""\
-        from anthill.core.app import App, run_workflow
-        from anthill.core.domain import State
+        from antkeeper.core.app import App, run_workflow
+        from antkeeper.core.domain import State
 
         app = App(log_dir="{log_dir}", state_dir="{state_dir}")
 
@@ -38,7 +38,7 @@ def slack_client():
         "SLACK_COOLDOWN_SECONDS": "0",
     })
     api_mock = AsyncMock(return_value={"ok": True})
-    slack_api_patch = patch("anthill.http.slack_events.slack_api", api_mock)
+    slack_api_patch = patch("antkeeper.http.slack_events.slack_api", api_mock)
 
     try:
         env_patch.start()

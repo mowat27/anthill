@@ -1,4 +1,4 @@
-"""FastAPI server for Anthill workflows.
+"""FastAPI server for Antkeeper workflows.
 
 Defines all routes and delegates to library modules for implementation.
 """
@@ -7,32 +7,32 @@ import os
 import dotenv
 from fastapi import BackgroundTasks, FastAPI, Request
 
-from anthill.cli import load_app
-from anthill.http.webhook import WebhookRequest, WebhookResponse, handle_webhook
-from anthill.http.slack_events import SlackEventProcessor
+from antkeeper.cli import load_app
+from antkeeper.http.webhook import WebhookRequest, WebhookResponse, handle_webhook
+from antkeeper.http.slack_events import SlackEventProcessor
 
 
-def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handlers.py")) -> FastAPI:
-    """Create and configure a FastAPI application for Anthill workflows.
+def create_app(agents_file: str = os.environ.get("ANTKEEPER_AGENTS_FILE", "handlers.py")) -> FastAPI:
+    """Create and configure a FastAPI application for Antkeeper workflows.
 
-    Loads an Anthill app from the specified Python file and creates a FastAPI
+    Loads an Antkeeper app from the specified Python file and creates a FastAPI
     server with /webhook and /slack_event endpoints.
 
     Args:
-        agents_file: Path to Python file containing the Anthill app.
-            Defaults to ANTHILL_AGENTS_FILE env var or "handlers.py".
+        agents_file: Path to Python file containing the Antkeeper app.
+            Defaults to ANTKEEPER_AGENTS_FILE env var or "handlers.py".
 
     Returns:
         Configured FastAPI application instance.
     """
     dotenv.load_dotenv()
-    anthill_app = load_app(agents_file)
+    antkeeper_app = load_app(agents_file)
     api = FastAPI()
-    slack = SlackEventProcessor(anthill_app)
+    slack = SlackEventProcessor(antkeeper_app)
 
     @api.post("/webhook", response_model=WebhookResponse)
     async def webhook(request: WebhookRequest, background_tasks: BackgroundTasks):
-        """Webhook endpoint for triggering Anthill workflows via HTTP POST.
+        """Webhook endpoint for triggering Antkeeper workflows via HTTP POST.
 
         Args:
             request: Webhook request with workflow name and initial state.
@@ -41,7 +41,7 @@ def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handler
         Returns:
             WebhookResponse with unique run ID for the triggered workflow.
         """
-        return await handle_webhook(request, background_tasks, anthill_app)
+        return await handle_webhook(request, background_tasks, antkeeper_app)
 
     @api.post("/slack_event")
     async def slack_event(request: Request):
@@ -63,10 +63,10 @@ def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handler
 
 
 app = create_app()
-"""FastAPI application instance configured with Anthill workflow routes.
+"""FastAPI application instance configured with Antkeeper workflow routes.
 
 This is the ASGI application instance that should be passed to uvicorn or
 other ASGI servers. It is created by calling create_app() with default
-parameters (reading from ANTHILL_AGENTS_FILE environment variable or
+parameters (reading from ANTKEEPER_AGENTS_FILE environment variable or
 using "handlers.py" as the default agents file).
 """

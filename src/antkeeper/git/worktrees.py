@@ -6,7 +6,7 @@ import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
 
-logger = logging.getLogger("anthill.git.worktrees")
+logger = logging.getLogger("antkeeper.git.worktrees")
 
 
 class WorktreeError(Exception):

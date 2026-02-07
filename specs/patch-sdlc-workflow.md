@@ -2,7 +2,7 @@
 
 - Chain `specify -> branch -> implement -> document` as a single composite workflow via `run_workflow`.
 - Extract structured data (spec path, slug, branch) from LLM responses using JSON-extracting prompts; store in state instead of raw responses.
-- Log LLM prompts and responses via `runner.logger`; add `extract_json` helper in new `src/anthill/helpers/` package to strip markdown fencing from JSON in LLM output.
+- Log LLM prompts and responses via `runner.logger`; add `extract_json` helper in new `src/antkeeper/helpers/` package to strip markdown fencing from JSON in LLM output.
 
 ## Solution Design
 
@@ -25,25 +25,25 @@ types:
 ## Relevant Files
 
 - `handlers.py` — Contains all current handlers (`specify`, `branch`, `implement`, `document`) and the `_run_command` helper.
-- `src/anthill/core/app.py` — Provides `run_workflow` used to compose the SDLC pipeline. Read-only reference.
-- `src/anthill/core/runner.py` — Provides `runner.logger` for logging. Read-only reference.
-- `src/anthill/llm/claude_code.py` — `ClaudeCodeAgent` used by handlers. Read-only reference.
+- `src/antkeeper/core/app.py` — Provides `run_workflow` used to compose the SDLC pipeline. Read-only reference.
+- `src/antkeeper/core/runner.py` — Provides `runner.logger` for logging. Read-only reference.
+- `src/antkeeper/llm/claude_code.py` — `ClaudeCodeAgent` used by handlers. Read-only reference.
 - `tests/core/test_workflows.py` — Existing workflow tests. Read-only reference for test patterns.
 - `app_docs/testing_policy.md` — Testing policy docs. Needs update to reference `tests/helpers/`.
 
 ### New Files
 
-- `src/anthill/helpers/__init__.py` — Package init, exports `extract_json`.
-- `src/anthill/helpers/json.py` — Contains `extract_json(text: str) -> dict` helper.
+- `src/antkeeper/helpers/__init__.py` — Package init, exports `extract_json`.
+- `src/antkeeper/helpers/json.py` — Contains `extract_json(text: str) -> dict` helper.
 - `tests/helpers/__init__.py` — Test package init.
 - `tests/helpers/test_extract_json.py` — Unit tests for `extract_json`.
 
 ## Workflow
 
-### Step 1: Add `extract_json` helper in `src/anthill/helpers/`
+### Step 1: Add `extract_json` helper in `src/antkeeper/helpers/`
 
-- Create `src/anthill/helpers/__init__.py` that exports `extract_json` from the `json` module.
-- Create `src/anthill/helpers/json.py` with a function `extract_json(text: str) -> dict` that:
+- Create `src/antkeeper/helpers/__init__.py` that exports `extract_json` from the `json` module.
+- Create `src/antkeeper/helpers/json.py` with a function `extract_json(text: str) -> dict` that:
   - Finds the first `{` and last `}` in the text
   - Returns the substring between them (inclusive)
   - Parses it with `json.loads()`
@@ -77,11 +77,11 @@ types:
 - Add `tests/helpers/` to the test organization tree in `app_docs/testing_policy.md` to reflect the new `helpers` package:
   ```
   tests/
-  ├── core/              # Tests for src/anthill/core/
-  ├── channels/          # Tests for src/anthill/channels/
-  ├── helpers/           # Tests for src/anthill/helpers/
-  ├── llm/               # Tests for src/anthill/llm/
-  └── test_cli.py        # Tests for src/anthill/cli.py
+  ├── core/              # Tests for src/antkeeper/core/
+  ├── channels/          # Tests for src/antkeeper/channels/
+  ├── helpers/           # Tests for src/antkeeper/helpers/
+  ├── llm/               # Tests for src/antkeeper/llm/
+  └── test_cli.py        # Tests for src/antkeeper/cli.py
   ```
 
 ### Step 6: Run validation commands
@@ -111,7 +111,7 @@ types:
 - `branch` handler stores `branch_name` in state (not `result`).
 - `implement` and `document` handlers do not store raw LLM responses in state.
 - All handlers log prompts and responses via `runner.logger`.
-- `extract_json` in `src/anthill/helpers/json.py` strips markdown fencing and surrounding text, parses JSON, and raises `ValueError` on failure.
+- `extract_json` in `src/antkeeper/helpers/json.py` strips markdown fencing and surrounding text, parses JSON, and raises `ValueError` on failure.
 - `tests/helpers/test_extract_json.py` passes with tests for `extract_json`.
 - `app_docs/testing_policy.md` updated with `tests/helpers/` in the test organization tree.
 
@@ -130,8 +130,8 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 - The `sdlc` handler is the entry point for the full lifecycle. Individual handlers remain registered and usable standalone.
 - The JSON extraction prompt pattern wraps the real slash command inside a meta-prompt. Example for specify: `Run "/specify patch sdlc-workflow ..." and extract the spec file path and slug. Return ONLY a JSON object: {"spec_file": "<path>", "slug": "<slug>"}`.
 - `implement` and `document` are side-effect steps. They don't need JSON extraction — just logging. They can store a simple status string in state if desired, but must not store the full LLM response.
-- The only framework change is the new `src/anthill/helpers/` package. No changes to existing framework modules (`core/`, `channels/`, `llm/`).
+- The only framework change is the new `src/antkeeper/helpers/` package. No changes to existing framework modules (`core/`, `channels/`, `llm/`).
 
 ## Report
 
-Files changed: `handlers.py` (refactored all handlers, added `sdlc` composite handler), `app_docs/testing_policy.md` (added `tests/helpers/` to tree). Files added: `src/anthill/helpers/__init__.py`, `src/anthill/helpers/json.py` (`extract_json` helper), `tests/helpers/__init__.py`, `tests/helpers/test_extract_json.py`. Validations: `pytest`, `ruff`, `ty`. Key design decision: `extract_json` lives in the framework as a reusable helper since it's general-purpose LLM response parsing, not handler-specific logic. Each handler constructs its own prompt with JSON extraction instructions rather than using a generic wrapper, because each step extracts different fields.
+Files changed: `handlers.py` (refactored all handlers, added `sdlc` composite handler), `app_docs/testing_policy.md` (added `tests/helpers/` to tree). Files added: `src/antkeeper/helpers/__init__.py`, `src/antkeeper/helpers/json.py` (`extract_json` helper), `tests/helpers/__init__.py`, `tests/helpers/test_extract_json.py`. Validations: `pytest`, `ruff`, `ty`. Key design decision: `extract_json` lives in the framework as a reusable helper since it's general-purpose LLM response parsing, not handler-specific logic. Each handler constructs its own prompt with JSON extraction instructions rather than using a generic wrapper, because each step extracts different fields.

@@ -11,12 +11,12 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from anthill.channels.slack import SlackChannel
-from anthill.core.app import App
-from anthill.core.runner import Runner
-from anthill.http import run_workflow_background
+from antkeeper.channels.slack import SlackChannel
+from antkeeper.core.app import App
+from antkeeper.core.runner import Runner
+from antkeeper.http import run_workflow_background
 
-logger = logging.getLogger("anthill.http.slack_events")
+logger = logging.getLogger("antkeeper.http.slack_events")
 
 
 def is_bot_message(event: dict) -> bool:
@@ -109,18 +109,18 @@ class SlackEventProcessor:
     message to the appropriate workflow handler.
 
     Attributes:
-        _app: Anthill App instance containing registered workflow handlers.
+        _app: Antkeeper App instance containing registered workflow handlers.
         _pending: Dictionary mapping (channel_id, ts) tuples to pending messages
             awaiting debounce timer expiration.
     """
 
-    def __init__(self, anthill_app: App) -> None:
+    def __init__(self, antkeeper_app: App) -> None:
         """Initialize the Slack event processor.
 
         Args:
-            anthill_app: Anthill App instance with registered workflow handlers.
+            antkeeper_app: Antkeeper App instance with registered workflow handlers.
         """
-        self._app = anthill_app
+        self._app = antkeeper_app
         self._pending: dict[tuple[str, str], PendingMessage] = {}
 
     async def handle_event(self, body: dict) -> dict:

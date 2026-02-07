@@ -1,4 +1,4 @@
-"""LLM agent abstractions for Anthill workflows.
+"""LLM agent abstractions for Antkeeper workflows.
 
 This module defines the Agent protocol that all LLM implementations must follow.
 Agents provide a uniform interface for executing prompts regardless of the

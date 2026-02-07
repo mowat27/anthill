@@ -2,7 +2,7 @@
 
 ## Philosophy
 
-Test the framework, not the app. The core machinery (`anthill.core.*`) is the unit under test. User-defined handlers exist only as test data to exercise the framework.
+Test the framework, not the app. The core machinery (`antkeeper.core.*`) is the unit under test. User-defined handlers exist only as test data to exercise the framework.
 
 ## Test Structure
 
@@ -71,16 +71,16 @@ just test
 Tests mirror source layout:
 ```
 tests/
-├── core/              # Tests for src/anthill/core/
-├── channels/          # Tests for src/anthill/channels/
+├── core/              # Tests for src/antkeeper/core/
+├── channels/          # Tests for src/antkeeper/channels/
 │   └── test_slack_channel.py  # SlackChannel unit tests
-├── helpers/           # Tests for src/anthill/helpers/
-├── llm/               # Tests for src/anthill/llm/
-├── git/               # Tests for src/anthill/git/
+├── helpers/           # Tests for src/antkeeper/helpers/
+├── llm/               # Tests for src/antkeeper/llm/
+├── git/               # Tests for src/antkeeper/git/
 │   ├── conftest.py    # git_repo fixture
 │   ├── test_worktree.py      # Worktree class tests
 │   └── test_context.py       # git_worktree context manager tests
-├── test_cli.py        # Tests for src/anthill/cli.py
+├── test_cli.py        # Tests for src/antkeeper/cli.py
 └── test_slack_server.py  # Tests for Slack event endpoint
 ```
 
@@ -124,10 +124,10 @@ API channel tests follow the same test double pattern as CLI channel:
 
 SlackChannel tests (`tests/channels/test_slack_channel.py`) mock the HTTP transport layer:
 
-**Mock httpx.Client.post** - Patch `anthill.channels.slack.httpx.Client` to intercept Slack API calls without network I/O:
+**Mock httpx.Client.post** - Patch `antkeeper.channels.slack.httpx.Client` to intercept Slack API calls without network I/O:
 
 ```python
-@patch("anthill.channels.slack.httpx.Client")
+@patch("antkeeper.channels.slack.httpx.Client")
 def test_report_progress_posts_to_slack_thread(self, mock_client_cls):
     mock_client = MagicMock()
     mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -146,7 +146,7 @@ def test_report_progress_posts_to_slack_thread(self, mock_client_cls):
 **HTTP failure resilience** - Verify that `httpx.HTTPError` is caught and logged, not raised:
 
 ```python
-@patch("anthill.channels.slack.httpx.Client")
+@patch("antkeeper.channels.slack.httpx.Client")
 def test_report_progress_survives_http_failure(self, mock_client_cls):
     mock_client = MagicMock()
     mock_client.post.side_effect = httpx.HTTPError("connection failed")
@@ -163,11 +163,11 @@ Tests cover: channel type identifier, initial state handling (parametrized for N
 
 Slack event endpoint tests (`tests/test_slack_server.py`) exercise the `/slack_event` POST route:
 
-**Mock slack_api** - Patch `anthill.http.slack_events.slack_api` with `AsyncMock` to intercept all Slack API calls (reactions, chat.postMessage) without network I/O:
+**Mock slack_api** - Patch `antkeeper.http.slack_events.slack_api` with `AsyncMock` to intercept all Slack API calls (reactions, chat.postMessage) without network I/O:
 
 ```python
 api_mock = AsyncMock(return_value={"ok": True})
-slack_api_patch = patch("anthill.http.slack_events.slack_api", api_mock)
+slack_api_patch = patch("antkeeper.http.slack_events.slack_api", api_mock)
 ```
 
 **Environment variable patching** - Use `patch.dict(os.environ, {...})` to inject required Slack env vars (`SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, `SLACK_COOLDOWN_SECONDS`):

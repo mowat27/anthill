@@ -8,9 +8,9 @@ calls and handles command construction, error reporting, and response parsing.
 import logging
 import subprocess
 
-from anthill.llm.errors import AgentExecutionError
+from antkeeper.llm.errors import AgentExecutionError
 
-logger = logging.getLogger("anthill.llm.claude_code")
+logger = logging.getLogger("antkeeper.llm.claude_code")
 
 
 class ClaudeCodeAgent:

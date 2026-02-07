@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 import pytest
 
-from anthill.core.domain import State
-from anthill.llm.claude_code import ClaudeCodeAgent
-from anthill.llm.errors import AgentExecutionError
+from antkeeper.core.domain import State
+from antkeeper.llm.claude_code import ClaudeCodeAgent
+from antkeeper.llm.errors import AgentExecutionError
 
 
 class TestClaudeCodeAgent:
@@ -19,7 +19,7 @@ class TestClaudeCodeAgent:
 
     def test_successful_prompt_returns_stdout(self):
         """Test that successful subprocess execution returns stdout."""
-        with patch("anthill.llm.claude_code.subprocess.run") as mock_run:
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="answer", stderr=""
             )
@@ -28,7 +28,7 @@ class TestClaudeCodeAgent:
 
     def test_failed_prompt_raises_agent_execution_error(self):
         """Test that non-zero exit code raises AgentExecutionError."""
-        with patch("anthill.llm.claude_code.subprocess.run") as mock_run:
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=1, stdout="", stderr="boom"
             )
@@ -38,7 +38,7 @@ class TestClaudeCodeAgent:
 
     def test_model_passed_to_subprocess(self):
         """Test that model flag is included in subprocess args when set."""
-        with patch("anthill.llm.claude_code.subprocess.run") as mock_run:
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="ok", stderr=""
             )
@@ -50,7 +50,7 @@ class TestClaudeCodeAgent:
 
     def test_no_model_omits_flag(self):
         """Test that model flag is omitted when model is None."""
-        with patch("anthill.llm.claude_code.subprocess.run") as mock_run:
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="ok", stderr=""
             )
@@ -61,7 +61,7 @@ class TestClaudeCodeAgent:
 
     def test_missing_binary_raises_agent_execution_error(self):
         """Test that FileNotFoundError from subprocess is wrapped in AgentExecutionError."""
-        with patch("anthill.llm.claude_code.subprocess.run") as mock_run:
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError("claude")
             agent = ClaudeCodeAgent()
             with pytest.raises(AgentExecutionError, match="claude binary not found"):
@@ -69,7 +69,7 @@ class TestClaudeCodeAgent:
 
     def test_empty_prompt_passed_through(self):
         """Test that empty string prompt is passed to subprocess as-is."""
-        with patch("anthill.llm.claude_code.subprocess.run") as mock_run:
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="", stderr=""
             )

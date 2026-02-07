@@ -1,6 +1,6 @@
-"""Command-line interface for Anthill workflow framework.
+"""Command-line interface for Antkeeper workflow framework.
 
-This module provides the CLI entry point for executing Anthill workflows.
+This module provides the CLI entry point for executing Antkeeper workflows.
 It handles argument parsing, app loading from Python files, initial state
 configuration, and runner setup.
 
@@ -15,18 +15,18 @@ import os
 import sys
 from pathlib import Path
 
-from anthill.channels.cli import CliChannel
-from anthill.core.domain import WorkflowFailedError
-from anthill.core.runner import Runner
+from antkeeper.channels.cli import CliChannel
+from antkeeper.core.domain import WorkflowFailedError
+from antkeeper.core.runner import Runner
 
-logger = logging.getLogger("anthill.cli")
+logger = logging.getLogger("antkeeper.cli")
 
 
 def load_app(path: str):
-    """Dynamically load an Anthill app from a Python file.
+    """Dynamically load an Antkeeper app from a Python file.
 
     Uses importlib to dynamically import a Python module and extract its
-    'app' attribute, which should be an instance of anthill.core.app.App.
+    'app' attribute, which should be an instance of antkeeper.core.app.App.
 
     Args:
         path: File path to the Python module containing the app.
@@ -70,7 +70,7 @@ def parse_state_pairs(pairs: list[str]) -> dict[str, str]:
 
 
 def main() -> None:
-    """Main entry point for the Anthill CLI.
+    """Main entry point for the Antkeeper CLI.
 
     Parses command-line arguments and executes the requested workflow.
 
@@ -99,13 +99,13 @@ def main() -> None:
             invalid arguments, workflow failure).
 
     Examples:
-        anthill run my_workflow
-        anthill run --agents-file=my_handlers.py --prompt="Hello" my_workflow
-        anthill run --prompt-file=prompt.md my_workflow
-        anthill run --initial-state key1=val1 --initial-state key2=val2 my_workflow
-        anthill server --host 0.0.0.0 --port 8000
+        antkeeper run my_workflow
+        antkeeper run --agents-file=my_handlers.py --prompt="Hello" my_workflow
+        antkeeper run --prompt-file=prompt.md my_workflow
+        antkeeper run --initial-state key1=val1 --initial-state key2=val2 my_workflow
+        antkeeper server --host 0.0.0.0 --port 8000
     """
-    parser = argparse.ArgumentParser(prog="anthill")
+    parser = argparse.ArgumentParser(prog="antkeeper")
     subparsers = parser.add_subparsers(dest="command")
 
     run_parser = subparsers.add_parser("run")
@@ -171,8 +171,8 @@ def main() -> None:
     elif args.command == "server":
         import uvicorn
 
-        os.environ["ANTHILL_AGENTS_FILE"] = args.agents_file
-        uvicorn.run("anthill.server:app", host=args.host, port=args.port, reload=args.reload)
+        os.environ["ANTKEEPER_AGENTS_FILE"] = args.agents_file
+        uvicorn.run("antkeeper.server:app", host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":

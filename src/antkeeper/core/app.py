@@ -12,10 +12,10 @@ from __future__ import annotations
 import functools
 from typing import Any, Callable, NoReturn, TYPE_CHECKING
 
-from anthill.core.domain import State
+from antkeeper.core.domain import State
 
 if TYPE_CHECKING:
-    from anthill.core.runner import Runner
+    from antkeeper.core.runner import Runner
 
 
 # -- Core ----------------------------------------------------------------------
@@ -41,13 +41,13 @@ class App:
         worktree_dir: Directory path where git worktrees will be created.
         state_dir: Directory path where Runner instances will write state files.
     """
-    def __init__(self, log_dir: str = "agents/logs/", worktree_dir: str = "trees/", state_dir: str = ".anthill/state/") -> None:
+    def __init__(self, log_dir: str = "agents/logs/", worktree_dir: str = "trees/", state_dir: str = ".antkeeper/state/") -> None:
         """Initialize a new App instance with an empty handler registry.
 
         Args:
             log_dir: Directory for log files. Defaults to "agents/logs/".
             worktree_dir: Directory for git worktrees. Defaults to "trees/".
-            state_dir: Directory for state files. Defaults to ".anthill/state/".
+            state_dir: Directory for state files. Defaults to ".antkeeper/state/".
         """
         self.handlers = {}
         self.log_dir = log_dir

@@ -11,7 +11,7 @@ import textwrap
 import pytest
 from fastapi.testclient import TestClient
 
-from anthill.server import create_app
+from antkeeper.server import create_app
 
 
 @pytest.fixture()
@@ -19,8 +19,8 @@ def client():
     """Create a test client with a temporary agents file."""
     log_dir = tempfile.mkdtemp()
     agents_code = textwrap.dedent(f"""\
-        from anthill.core.app import App, run_workflow
-        from anthill.core.domain import State
+        from antkeeper.core.app import App, run_workflow
+        from antkeeper.core.domain import State
 
         app = App(log_dir="{log_dir}")
 

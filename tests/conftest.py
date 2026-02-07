@@ -1,6 +1,6 @@
 """Shared pytest fixtures and test utilities.
 
-This module provides test doubles and factory fixtures for testing Anthill
+This module provides test doubles and factory fixtures for testing Antkeeper
 workflows without I/O side effects.
 """
 
@@ -9,9 +9,9 @@ import tempfile
 import pytest
 from typing import Any
 
-from anthill.core.app import App
-from anthill.core.domain import State
-from anthill.core.runner import Runner
+from antkeeper.core.app import App
+from antkeeper.core.domain import State
+from antkeeper.core.runner import Runner
 
 
 class TestChannel:

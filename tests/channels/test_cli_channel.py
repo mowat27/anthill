@@ -6,7 +6,7 @@ configuration for command-line workflows.
 
 import pytest
 
-from anthill.channels.cli import CliChannel
+from antkeeper.channels.cli import CliChannel
 
 
 class TestCliChannel:

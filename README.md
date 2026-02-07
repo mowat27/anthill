@@ -1,4 +1,4 @@
-# Anthill
+# Antkeeper
 
 A lightweight Python workflow engine. Define handlers (workflow steps) via a decorator-based `App`, wire them to a `Channel` (I/O boundary), and execute through a `Runner`. Designed for composable, testable pipelines.
 
@@ -14,22 +14,22 @@ A lightweight Python workflow engine. Define handlers (workflow steps) via a dec
 uv sync
 
 # Run a workflow via CLI
-anthill run --agents-file handlers.py --initial-state result=5 plus_1
+antkeeper run --agents-file handlers.py --initial-state result=5 plus_1
 
 # Run an LLM workflow with prompt and model
-anthill run --prompt "describe this project" --model sonnet specify
+antkeeper run --prompt "describe this project" --model sonnet specify
 
 # Run with prompt from file (mutually exclusive with --prompt)
-anthill run --prompt-file prompts/describe.md --model sonnet specify
+antkeeper run --prompt-file prompts/describe.md --model sonnet specify
 
 # Start an API server to trigger workflows via HTTP
-anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py
+antkeeper server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 
 # For Slack integration, create a .env file with:
 #   SLACK_BOT_TOKEN=xoxb-...
 #   SLACK_BOT_USER_ID=U...
 #   SLACK_COOLDOWN_SECONDS=5  (optional, default 5)
-#   ANTHILL_AGENTS_FILE=handlers.py  (optional)
+#   ANTKEEPER_AGENTS_FILE=handlers.py  (optional)
 
 # Use just recipes for common workflows
 just sdlc "Add authentication" opus           # Standard SDLC workflow
@@ -39,7 +39,7 @@ just sdlc_iso "Add dark mode" opus           # Isolated SDLC in git worktree
 ## Project Structure
 
 ```
-src/anthill/
+src/antkeeper/
 ├── core/               # Framework kernel
 │   ├── domain.py       # State type alias, Channel protocol, WorkflowFailedError
 │   ├── app.py          # App handler registry, run_workflow helper
@@ -109,12 +109,12 @@ src/anthill/
 Create a Python file with an `App` instance and decorated handlers:
 
 ```python
-from anthill.core.app import App, run_workflow
-from anthill.core.runner import Runner
-from anthill.core.domain import State
+from antkeeper.core.app import App, run_workflow
+from antkeeper.core.runner import Runner
+from antkeeper.core.domain import State
 
-app = App()  # Defaults: log_dir="agents/logs/", worktree_dir="trees/", state_dir=".anthill/state/"
-# Or configure: App(log_dir="my/logs/", worktree_dir="worktrees/", state_dir=".anthill/state/")
+app = App()  # Defaults: log_dir="agents/logs/", worktree_dir="trees/", state_dir=".antkeeper/state/"
+# Or configure: App(log_dir="my/logs/", worktree_dir="worktrees/", state_dir=".antkeeper/state/")
 
 @app.handler
 def my_step(runner: Runner, state: State) -> State:
@@ -128,7 +128,7 @@ Handlers always return a **new** dict (spread pattern) — never mutate incoming
 Handlers can delegate to LLM agents:
 
 ```python
-from anthill.llm.claude_code import ClaudeCodeAgent
+from antkeeper.llm.claude_code import ClaudeCodeAgent
 
 @app.handler
 def ask_llm(runner: Runner, state: State) -> State:
@@ -140,9 +140,9 @@ def ask_llm(runner: Runner, state: State) -> State:
 Handlers can compose steps using `run_workflow`, which folds state through a list of functions sequentially. Each step receives the state returned by the previous step, so steps communicate by adding keys to the state dict:
 
 ```python
-from anthill.core.app import App, run_workflow
-from anthill.core.runner import Runner
-from anthill.core.domain import State
+from antkeeper.core.app import App, run_workflow
+from antkeeper.core.runner import Runner
+from antkeeper.core.domain import State
 
 app = App()
 
@@ -171,13 +171,13 @@ def pipeline(runner: Runner, state: State) -> State:
 Registering the individual steps with `@app.handler` is optional, but doing so allows them to be run individually from the CLI using `--initial-state` to supply the keys they expect:
 
 ```bash
-anthill run --agents-file handlers.py --initial-state raw_data='[1, 2, 3]' transform
+antkeeper run --agents-file handlers.py --initial-state raw_data='[1, 2, 3]' transform
 ```
 
 Handlers can isolate work in git worktrees:
 
 ```python
-from anthill.git import Worktree, git_worktree
+from antkeeper.git import Worktree, git_worktree
 from datetime import datetime
 
 @app.handler
@@ -198,7 +198,7 @@ def isolated_workflow(runner: Runner, state: State) -> State:
 The framework creates a log file and state file for each workflow run:
 
 - **Log file**: `{log_dir}/{timestamp}-{run_id}.log` (default: `agents/logs/`)
-- **State file**: `{state_dir}/{timestamp}-{run_id}.json` (default: `.anthill/state/`)
+- **State file**: `{state_dir}/{timestamp}-{run_id}.json` (default: `.antkeeper/state/`)
 
 Configure via `App(log_dir="path/", state_dir="path/")`. File naming ensures correlation between logs and state.
 
@@ -214,20 +214,20 @@ def my_step(runner: Runner, state: State) -> State:
     return {**state, "done": True}
 ```
 
-Log format: `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] anthill.run.{run_id} - message`
+Log format: `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] antkeeper.run.{run_id} - message`
 
 Logs do not appear in stdout/stderr (propagation disabled).
 
 ### CLI Commands
 
-**anthill run** - Execute a workflow via CLI:
+**antkeeper run** - Execute a workflow via CLI:
 - `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)
 - `--prompt <text>` - Prompt string to inject into initial state as `state["prompt"]`
 - `--prompt-file <path>` - Read prompt from file (mutually exclusive with `--prompt`)
 - `--model <name>` - Model name to inject as `state["model"]` (e.g., `opus`, `sonnet`)
 - `--initial-state key=value` - Set additional state keys (repeatable)
 
-**anthill server** - Start FastAPI webhook server:
+**antkeeper server** - Start FastAPI webhook server:
 - `--host <host>` - Bind address (default: `127.0.0.1`)
 - `--port <port>` - Port number (default: `8000`)
 - `--reload` - Enable auto-reload on code changes
@@ -271,24 +271,24 @@ Tests are organized to mirror the source layout (`tests/core/`, `tests/channels/
 
 ### Navigating the Codebase
 
-Start with the **core layer** (`src/anthill/core/`):
+Start with the **core layer** (`src/antkeeper/core/`):
 - `domain.py` defines `State` and the `Channel` protocol — the two types everything else depends on
 - `app.py` has the `App` registry and `run_workflow` composition helper
 - `runner.py` ties `App` + `Channel` together and drives execution
 
-The **channels layer** (`src/anthill/channels/`) has I/O adapters. `CliChannel` writes to stdout/stderr for terminal usage. `ApiChannel` writes to stdout/stderr for server logs. `SlackChannel` posts progress and results to Slack threads. Add new channels here for other I/O patterns.
+The **channels layer** (`src/antkeeper/channels/`) has I/O adapters. `CliChannel` writes to stdout/stderr for terminal usage. `ApiChannel` writes to stdout/stderr for server logs. `SlackChannel` posts progress and results to Slack threads. Add new channels here for other I/O patterns.
 
-The **http layer** (`src/anthill/http/`) contains HTTP endpoint logic:
+The **http layer** (`src/antkeeper/http/`) contains HTTP endpoint logic:
 - `__init__.py` exports `run_workflow_background()` (shared background task execution)
 - `webhook.py` exports `handle_webhook()` (POST `/webhook` implementation)
 - `slack_events.py` exports `SlackEventProcessor` class (POST `/slack_event` implementation with debounce state)
 - `server.py` in the root defines routes with `@api.post()` decorators and delegates to these modules
 
-The **llm layer** (`src/anthill/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
+The **llm layer** (`src/antkeeper/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
 
-The **git layer** (`src/anthill/git/`) provides git worktree support for isolated workflow execution. The `Worktree` class wraps git subprocess operations, and `git_worktree` context manager guarantees cwd restoration.
+The **git layer** (`src/antkeeper/git/`) provides git worktree support for isolated workflow execution. The `Worktree` class wraps git subprocess operations, and `git_worktree` context manager guarantees cwd restoration.
 
-The **CLI** (`src/anthill/cli.py`) is the entry point. It loads user-defined handlers from a Python file (default: `handlers.py`) and wires everything together. Supports `--prompt` and `--prompt-file` (mutually exclusive) for injecting prompts into state.
+The **CLI** (`src/antkeeper/cli.py`) is the entry point. It loads user-defined handlers from a Python file (default: `handlers.py`) and wires everything together. Supports `--prompt` and `--prompt-file` (mutually exclusive) for injecting prompts into state.
 
 ### Framework Documentation
 
