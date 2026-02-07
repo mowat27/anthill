@@ -25,5 +25,8 @@ Handlers: `def step(runner: Runner, state: State) -> State`. Chain via `run_work
 ## Handlers
 Organize: steps, shared constants, workflows. Constants only when shared.
 
+## Worktree discipline
+Always edit files relative to the current working directory. Never follow IDE file paths outside the worktree.
+
 ## Dev
 `just` = lint+typecheck+test. `uv sync` to install.

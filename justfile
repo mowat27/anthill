@@ -11,6 +11,11 @@ ty:
 test:
   uv run pytest
 
+check_api host="127.0.0.1" port="8000":
+  curl -s -X POST http://{{host}}:{{port}}/webhook \
+    -H "Content-Type: application/json" \
+    -d '{"workflow_name": "healthcheck"}' | python3 -m json.tool
+
 sdlc prompt model="opus":
   #!/usr/bin/env bash
   if [ -f "{{prompt}}" ]; then

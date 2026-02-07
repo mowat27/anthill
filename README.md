@@ -174,7 +174,7 @@ Logs do not appear in stdout/stderr (propagation disabled).
 ```bash
 curl -X POST http://localhost:8000/webhook \
   -H "Content-Type: application/json" \
-  -d '{"workflow_name": "my_workflow", "initial_state": {"key": "value"}}'
+  -d '{"workflow_name": "healthcheck"}'
 # Returns: {"run_id": "abc123"}
 ```
 
