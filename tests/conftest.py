@@ -4,6 +4,8 @@ This module provides test doubles and factory fixtures for testing Anthill
 workflows without I/O side effects.
 """
 
+import tempfile
+
 import pytest
 from typing import Any
 
@@ -34,15 +36,21 @@ class TestChannel:
 
 
 @pytest.fixture
-def runner_factory():
+def app():
+    """Provide a fresh App with logs directed to a temp directory."""
+    return App(log_dir=tempfile.mkdtemp())
+
+
+@pytest.fixture
+def runner_factory(app):
     """Factory fixture for creating test runners with capturing channels.
 
     Returns a factory function that creates a Runner with a TestChannel,
     allowing tests to exercise workflows and inspect captured messages.
     """
 
-    def _create(app: App, workflow_name: str, initial_state: State | None = None):
+    def _create(test_app: App | None = None, workflow_name: str = "test", initial_state: State | None = None):
         source = TestChannel(workflow_name, initial_state)
-        runner = Runner(app, source)
+        runner = Runner(test_app or app, source)
         return runner, source
     return _create

@@ -5,6 +5,7 @@ workflow handlers and the run_workflow function for executing handler chains.
 """
 from __future__ import annotations
 
+import functools
 from typing import Callable, NoReturn, TYPE_CHECKING
 
 from anthill.core.domain import State
@@ -22,9 +23,14 @@ class App:
     The App class manages handler registration and retrieval, allowing workflows
     to be defined as decorated functions and later executed by runners.
     """
-    def __init__(self):
-        """Initialize a new App instance with an empty handler registry."""
+    def __init__(self, log_dir: str = "agents/logs/"):
+        """Initialize a new App instance with an empty handler registry.
+
+        Args:
+            log_dir: Directory for log files. Defaults to "agents/logs/".
+        """
         self.handlers = {}
+        self.log_dir = log_dir
 
     def handler(self, fn):
         """Register a function as a workflow handler.
@@ -36,6 +42,7 @@ class App:
         Returns:
             The wrapped handler function that can be invoked by runners.
         """
+        @functools.wraps(fn)
         def wrapper(runner: Runner, state: State) -> State | NoReturn:
             return fn(runner, state)
 
@@ -72,6 +79,11 @@ def run_workflow(runner: Runner, state: State, steps: list[Callable]):
     Returns:
         The final state after all steps have been executed.
     """
+    runner.logger.info(f"run_workflow started with {len(steps)} steps: {[getattr(s, '__name__', repr(s)) for s in steps]}")
     for step in steps:
+        step_name = getattr(step, "__name__", repr(step))
+        runner.logger.info(f"Executing step: {step_name}")
         state = step(runner, state)
+        runner.logger.debug(f"Step completed: {step_name}, state keys: {list(state.keys())}")
+    runner.logger.info("run_workflow completed")
     return state

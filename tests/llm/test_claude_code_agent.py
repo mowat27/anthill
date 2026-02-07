@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 import pytest
 
-from anthill.core.app import App
 from anthill.core.domain import State
 from anthill.llm.claude_code import ClaudeCodeAgent
 from anthill.llm.errors import AgentExecutionError
@@ -83,9 +82,8 @@ class TestClaudeCodeAgent:
 class TestIntegration:
     """Integration tests for agent execution within the framework."""
 
-    def test_handler_using_mock_agent_in_runner(self, runner_factory):
+    def test_handler_using_mock_agent_in_runner(self, app, runner_factory):
         """Test full pipeline with a fake agent (no subprocess)."""
-        app = App()
 
         @app.handler
         def ask(runner, state: State) -> State:
@@ -99,9 +97,8 @@ class TestIntegration:
         result = runner.run()
         assert result["result"] == "canned"
 
-    def test_agent_execution_error_propagates(self, runner_factory):
+    def test_agent_execution_error_propagates(self, app, runner_factory):
         """Test that AgentExecutionError propagates through the runner."""
-        app = App()
 
         @app.handler
         def fail_agent(runner, state: State) -> State:

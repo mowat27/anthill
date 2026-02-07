@@ -4,10 +4,13 @@ Provides the main entry point for running Anthill workflows from the command lin
 """
 import argparse
 import importlib.util
+import logging
 import sys
 
 from anthill.channels.cli import CliChannel
 from anthill.core.runner import Runner
+
+logger = logging.getLogger("anthill.cli")
 
 
 def load_app(path: str):
@@ -81,17 +84,22 @@ def main():
         parser.print_help()
         sys.exit(0)
 
+    logger.debug(f"CLI args parsed: command={args.command}")
+
     if args.command == "run":
         agents_file = args.agents_file
         try:
             app = load_app(agents_file)
         except FileNotFoundError:
+            logger.error(f"Agents file not found: {agents_file}")
             print(f"Error: agents file not found: {agents_file}", file=sys.stderr)
             sys.exit(1)
         except AttributeError:
+            logger.error(f"{agents_file} has no 'app' attribute")
             print(f"Error: {agents_file} has no 'app' attribute", file=sys.stderr)
             sys.exit(1)
 
+        logger.info(f"App loaded from {agents_file}")
         state = parse_state_pairs(args.initial_state)
         if args.prompt is not None:
             state["prompt"] = args.prompt
@@ -99,7 +107,9 @@ def main():
             state["model"] = args.model
         channel = CliChannel(workflow_name=args.workflow_name, initial_state=state)
         runner = Runner(app, channel)
+        logger.info(f"Runner created: run_id={runner.id}")
         result = runner.run()
+        logger.info("Workflow run complete")
         print(result)
 
 
