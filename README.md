@@ -137,6 +137,43 @@ def ask_llm(runner: Runner, state: State) -> State:
     return {**state, "result": response}
 ```
 
+Handlers can compose steps using `run_workflow`, which folds state through a list of functions sequentially. Each step receives the state returned by the previous step, so steps communicate by adding keys to the state dict:
+
+```python
+from anthill.core.app import App, run_workflow
+from anthill.core.runner import Runner
+from anthill.core.domain import State
+
+app = App()
+
+@app.handler
+def fetch_data(runner: Runner, state: State) -> State:
+    runner.report_progress("fetching data")
+    return {**state, "raw_data": [1, 2, 3]}
+
+@app.handler
+def transform(runner: Runner, state: State) -> State:
+    doubled = [x * 2 for x in state["raw_data"]]
+    return {**state, "transformed": doubled}
+
+@app.handler
+def summarise(runner: Runner, state: State) -> State:
+    total = sum(state["transformed"])
+    return {**state, "summary": f"total={total}"}
+
+@app.handler
+def pipeline(runner: Runner, state: State) -> State:
+    return run_workflow(runner, state, [fetch_data, transform, summarise])
+```
+
+`fetch_data` writes `raw_data`, `transform` reads it and writes `transformed`, and `summarise` reads that. State is persisted after each step, so a failure mid-pipeline preserves the progress so far.
+
+Registering the individual steps with `@app.handler` is optional, but doing so allows them to be run individually from the CLI using `--initial-state` to supply the keys they expect:
+
+```bash
+anthill run --agents-file handlers.py --initial-state raw_data='[1, 2, 3]' transform
+```
+
 Handlers can isolate work in git worktrees:
 
 ```python
