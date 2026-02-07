@@ -50,15 +50,41 @@ Progress and error messages include the `run_id` for correlation.
 
 ## State Persistence
 
-The framework does not persist state. Handlers receive `State` as an immutable input and return a new `State` dict. If persistence is needed, implement it in a handler or custom channel:
+The framework automatically persists state as JSON on every change. State files are created in `app.state_dir` (default `.anthill/state/`) and named `{timestamp}-{run_id}.json` to match log file naming.
+
+### Configuration
 
 ```python
-@app.handler
-def persist_state(runner: Runner, state: State) -> State:
-    with open(f"/tmp/{state['run_id']}.json", "w") as f:
-        json.dump(state, f)
-    return state
+app = App(state_dir=".anthill/state/")  # custom directory
+app = App()                              # defaults to ".anthill/state/"
 ```
+
+### Persistence Points
+
+The `Runner` writes state to disk at three points:
+1. **Initial state creation** - After injecting `run_id` and `workflow_name` but before handler execution
+2. **After each workflow step** - When using `run_workflow()`, state is persisted after each step completes
+3. **Final state** - After the handler returns successfully
+
+Each write overwrites the file with the latest state snapshot (one file per run).
+
+### State File Format
+
+State files contain valid JSON with `indent=2` for readability:
+
+```json
+{
+  "run_id": "a1b2c3d4",
+  "workflow_name": "my_workflow",
+  "result": "done"
+}
+```
+
+State file stems match log file stems for correlation: `20260207143000-a1b2c3d4.json` pairs with `20260207143000-a1b2c3d4.log`.
+
+### Error Handling
+
+If a handler raises an exception, the state file contains the last successfully persisted state (typically the initial state). If state contains non-JSON-serializable values, `json.dump` raises `TypeError` - this is a handler bug, not a framework error.
 
 ## Logging
 

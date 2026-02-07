@@ -55,10 +55,10 @@ src/anthill/
 
 ### Key Concepts
 
-- **State** (`dict[str, Any]`) — All workflow data flows as a flat dictionary. Handlers receive and return `State`; the `Runner` injects `run_id` and `workflow_name`.
+- **State** (`dict[str, Any]`) — All workflow data flows as a flat dictionary. Handlers receive and return `State`; the `Runner` injects `run_id` and `workflow_name`. State is automatically persisted as JSON on every change.
 - **Channel** (Protocol) — I/O boundary adapter. Owns how progress/errors are reported and what initial state is supplied. This is the primary extension point for new I/O adapters.
-- **App** — Handler registry. Use the `@app.handler` decorator to register workflow steps by function name. Configure log and worktree directories via `App(log_dir="...", worktree_dir="...")`.
-- **Runner** — Execution engine. Binds an `App` + `Channel`, generates a `run_id`, and drives the workflow lifecycle.
+- **App** — Handler registry. Use the `@app.handler` decorator to register workflow steps by function name. Configure log, worktree, and state directories via `App(log_dir="...", worktree_dir="...", state_dir="...")`.
+- **Runner** — Execution engine. Binds an `App` + `Channel`, generates a `run_id`, and drives the workflow lifecycle. Persists state to `{timestamp}-{run_id}.json` in `app.state_dir`.
 - **run_workflow** — Composition helper. Folds state through a list of handler callables, enabling composite workflows without inheritance or a DAG scheduler.
 - **Agent** (Protocol) — LLM abstraction. Any object with a `prompt(str) -> str` method qualifies. Extension point for new LLM backends.
 - **ClaudeCodeAgent** — Concrete `Agent` implementation. Delegates prompts to the `claude` CLI via subprocess. Accepts an optional `model` parameter.
@@ -94,8 +94,8 @@ from anthill.core.app import App, run_workflow
 from anthill.core.runner import Runner
 from anthill.core.domain import State
 
-app = App()  # Defaults: log_dir="agents/logs/", worktree_dir="trees/"
-# Or configure: App(log_dir="my/logs/", worktree_dir="worktrees/")
+app = App()  # Defaults: log_dir="agents/logs/", worktree_dir="trees/", state_dir=".anthill/state/"
+# Or configure: App(log_dir="my/logs/", worktree_dir="worktrees/", state_dir=".anthill/state/")
 
 @app.handler
 def my_step(runner: Runner, state: State) -> State:
@@ -137,11 +137,18 @@ def isolated_workflow(runner: Runner, state: State) -> State:
     return {**state, "worktree_path": wt.path}
 ```
 
-### Logging
+### Logging and State Persistence
 
-The framework creates a log file for each workflow run at `{log_dir}/{timestamp}-{run_id}.log` (default: `agents/logs/`). Configure via `App(log_dir="path/")`.
+The framework creates a log file and state file for each workflow run:
 
-Logs capture framework lifecycle events (runner init, workflow start/complete), handler execution (step names, state keys at DEBUG level), and errors. Access the logger in handlers via `runner.logger`:
+- **Log file**: `{log_dir}/{timestamp}-{run_id}.log` (default: `agents/logs/`)
+- **State file**: `{state_dir}/{timestamp}-{run_id}.json` (default: `.anthill/state/`)
+
+Configure via `App(log_dir="path/", state_dir="path/")`. File naming ensures correlation between logs and state.
+
+Logs capture framework lifecycle events (runner init, workflow start/complete), handler execution (step names, state keys at DEBUG level), and errors. State is persisted as JSON after initial creation, after each `run_workflow()` step, and after final handler return.
+
+Access the logger in handlers via `runner.logger`:
 
 ```python
 @app.handler
@@ -202,7 +209,7 @@ just test    # Tests
 uv run -m pytest tests/ -v
 ```
 
-Tests are organized to mirror the source layout (`tests/core/`, `tests/channels/`, `tests/llm/`, `tests/git/`). Each test owns its setup using shared fixtures from `tests/conftest.py`. The `app` fixture provides log and worktree isolation via temp directories. Git-specific tests use the `git_repo` fixture from `tests/git/conftest.py`.
+Tests are organized to mirror the source layout (`tests/core/`, `tests/channels/`, `tests/llm/`, `tests/git/`). Each test owns its setup using shared fixtures from `tests/conftest.py`. The `app` fixture provides log, worktree, and state isolation via temp directories. Git-specific tests use the `git_repo` fixture from `tests/git/conftest.py`.
 
 ### Navigating the Codebase
 
