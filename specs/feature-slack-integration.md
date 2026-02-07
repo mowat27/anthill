@@ -11,9 +11,9 @@
 After this change, workflows can be triggered from Slack in addition to CLI and HTTP webhook:
 
 **Slack usage:**
-1. User @mentions the bot in a Slack channel: `@AntBot my_workflow do something`
+1. User @mentions the bot in a Slack channel: `@Anthill my_workflow do something`
 2. Bot adds a thumbsup reaction acknowledging receipt
-3. User can edit the message or reply in the thread with more text/files within the cooldown window (default 3s) — each action resets the timer
+3. User can edit the message or reply in the thread with more text/files within the cooldown window (default 30s) — each action resets the timer
 4. When the cooldown expires, the bot posts "Processing your request..." in the thread and dispatches to the `my_workflow` handler
 5. Handler calls `runner.report_progress("Step 1 done")` — message appears in the Slack thread
 6. Handler calls `runner.report_error("Something went wrong")` — error-formatted message appears in the Slack thread
@@ -73,17 +73,19 @@ types:
 - `src/anthill/core/app.py` — App handler registry, `run_workflow`. **No changes needed.**
 - `src/anthill/channels/api.py` — Reference for channel implementation pattern (constructor, type, report methods).
 - `src/anthill/channels/cli.py` — Reference for channel implementation pattern (logging, delegation).
-- `src/anthill/server.py` — Existing webhook server. Reference for `create_app` factory, `_run_workflow` helper, `load_app` import pattern. **No changes needed.**
-- `src/anthill/cli.py` — CLI entry point. Add `slack-server` subcommand.
+- `src/anthill/server.py` — Existing webhook server. Refactored: webhook logic moves to `http/webhook.py`, `create_app` becomes a clean orchestrator calling `setup_*` functions. `_run_workflow` stays here as shared infrastructure. **Modified.**
+- `src/anthill/cli.py` — CLI entry point. Add `slack-server` subcommand. Update `server` subcommand uvicorn target if needed.
 - `pyproject.toml` — Add `httpx` and `python-dotenv` to main dependencies.
 - `tests/conftest.py` — Reference for `TestChannel`, `app` fixture, `runner_factory` patterns.
 - `tests/channels/test_api_channel.py` — Reference for channel unit test patterns.
-- `tests/test_server.py` — Reference for server endpoint test patterns (TestClient, temp agents file).
+- `tests/test_server.py` — Existing server tests. Keep importing from `anthill.server` (unchanged). **No changes needed.**
 
 ### New Files
 
+- `src/anthill/http/__init__.py` — Package init (can be empty or re-export setup functions).
+- `src/anthill/http/webhook.py` — `setup_webhook_routes(api, anthill_app)` — existing `/webhook` endpoint logic extracted from `server.py`.
+- `src/anthill/http/slack_events.py` — `setup_slack_routes(api, anthill_app)` — Slack event routing, pending message store, debounce timer logic.
 - `src/anthill/channels/slack.py` — `SlackChannel` implementing the Channel protocol.
-- `src/anthill/slack_server.py` — Slack event endpoint, pending message store, debounce timer logic, `create_slack_app` factory.
 - `tests/channels/test_slack_channel.py` — Unit tests for SlackChannel.
 - `tests/test_slack_server.py` — Integration tests for the Slack event endpoint.
 
@@ -116,10 +118,24 @@ types:
 
 **Key design choice — HTTP errors caught, not propagated:** Per design philosophy, the channel is an I/O boundary. A transient Slack API failure should not crash the handler. Log and continue.
 
-### Step 3: Create Slack server module
+### Step 3: Create `http` package and refactor server
 
-- Create `src/anthill/slack_server.py`.
-- This module contains all Slack event handling logic: event routing, pending message store, debounce timers, Slack API calls for acknowledgements, and the `create_slack_app` factory.
+This step extracts endpoint logic into an `http` package and adds the Slack endpoint.
+
+#### 3a: Create `src/anthill/http/__init__.py`
+
+Empty file (or re-export setup functions for convenience).
+
+#### 3b: Create `src/anthill/http/webhook.py`
+
+Extract the existing `/webhook` endpoint from `server.py` into a `setup_webhook_routes(api, anthill_app)` function:
+- Move `WebhookRequest`, `WebhookResponse` models here.
+- Move the `POST /webhook` handler here, registering it on the passed `api` instance.
+- Import `_run_workflow` from `anthill.server`.
+
+#### 3c: Create `src/anthill/http/slack_events.py`
+
+This module contains Slack event handling logic: event routing, pending message store, debounce timers, Slack API calls for acknowledgements, and the `setup_slack_routes` function.
 
 **Helper functions (module-level):**
 
@@ -134,17 +150,28 @@ types:
 - Uses `httpx.AsyncClient` to POST to `https://slack.com/api/{method}` with `Authorization: Bearer {token}` header and JSON payload. Returns response JSON.
 - This is used by the async server endpoint for Slack acknowledgements (reactions, "Processing..." message). It is separate from the sync `httpx.Client` used by `SlackChannel`.
 
-**`create_slack_app(agents_file: str = ...) -> FastAPI`:**
-- Loads `.env` via `dotenv.load_dotenv()`.
-- Reads `SLACK_BOT_TOKEN` from `os.environ` — if missing, raise `ValueError("SLACK_BOT_TOKEN not set")`.
-- Reads `SLACK_BOT_USER_ID` from `os.environ` — if missing, raise `ValueError("SLACK_BOT_USER_ID not set")`.
-- Reads `SLACK_COOLDOWN_SECONDS` from `os.environ`, defaults to `3`, converts to `int`.
-- Loads anthill app via `load_app(agents_file)`.
-- Creates `FastAPI()` instance.
-- Initializes `pending: dict[tuple[str, str], PendingMessage] = {}` — scoped to the closure, not module-level. Each `create_slack_app()` call gets its own store (enables test isolation).
-- Includes the existing webhook router by importing `server.py`'s webhook endpoint, OR simply focuses solely on the Slack endpoint. **Decision: the slack-server command creates a standalone FastAPI app with only `POST /slack_event`.** The existing `/webhook` endpoint stays in `server.py` for the `anthill server` command. They are independent entry points.
+**`setup_slack_routes(api: FastAPI, anthill_app: App) -> None`:**
+- Initializes `pending: dict[tuple[str, str], PendingMessage] = {}` — scoped to the closure, not module-level. Each `setup_slack_routes()` call gets its own store (enables test isolation).
+- Registers `POST /slack_event` endpoint on the provided `api` FastAPI instance.
+- `SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, and `SLACK_COOLDOWN_SECONDS` (default `30`) are read from `os.environ` at request time inside the endpoint handler, not at setup time.
 
-**`POST /slack_event` endpoint:**
+#### 3d: Refactor `server.py`
+
+`server.py` becomes a clean orchestrator:
+
+```python
+def create_app(agents_file: str = ...) -> FastAPI:
+    anthill_app = load_app(agents_file)
+    api = FastAPI()
+    setup_webhook_routes(api, anthill_app)
+    setup_slack_routes(api, anthill_app)
+    return api
+```
+
+- `_run_workflow` stays in `server.py` as shared infrastructure (imported by both `http/webhook.py` and `http/slack_events.py`).
+- Existing imports (`from anthill.server import create_app`) continue to work — no breaking changes to tests or CLI.
+
+#### 3e: `POST /slack_event` endpoint (registered by `setup_slack_routes`)
 - Accepts raw JSON via `request: Request` then `body = await request.json()`. NOT a Pydantic model — Slack event payloads vary in shape.
 - Routing order (matching spike design):
 
@@ -166,7 +193,7 @@ types:
   9. All other events: return 200.
 
 **Debounce timer:**
-- `async def _on_timer_fire(key: tuple[str, str])` (defined inside `create_slack_app` closure so it can access `pending`, `slack_token`, `anthill_app`, `cooldown`):
+- `async def _on_timer_fire(key: tuple[str, str])` (defined inside `setup_slack_routes` closure so it can access `pending`, `slack_token`, `anthill_app`, `cooldown`):
   - `await asyncio.sleep(cooldown)`.
   - `entry = pending.pop(key, None)`. If `None`, return (deleted or already processed).
   - Post "Processing your request..." in the thread: `await slack_api(token, "chat.postMessage", {"channel": entry.channel_id, "thread_ts": entry.ts, "text": "Processing your request..."})`.
@@ -174,10 +201,7 @@ types:
   - Build initial state: `{"prompt": entry.text, "slack_user": entry.user}`. If `entry.files`, add `"files": entry.files`.
   - Create `SlackChannel(workflow_name=entry.workflow_name, initial_state=initial_state, slack_token=token, channel_id=entry.channel_id, thread_ts=entry.ts)`.
   - Create `Runner(anthill_app, channel)`.
-  - Run workflow: call `_run_workflow(runner)` (same pattern as `server.py`). This is sync, so run via `asyncio.to_thread(_run_workflow, runner)` to avoid blocking the event loop.
-
-**`_run_workflow(runner: Runner) -> None`:**
-- Same pattern as `server.py`: try `runner.run()`, catch `WorkflowFailedError` (pass), catch `Exception` (print to stderr).
+  - Run workflow: call `_run_workflow(runner)` (imported from `anthill.server`). This is sync, so run via `asyncio.to_thread(_run_workflow, runner)` to avoid blocking the event loop.
 
 ### Step 4: Add `slack-server` CLI subcommand
 
@@ -185,10 +209,10 @@ types:
   - Add `slack_server_parser = subparsers.add_parser("slack-server")`.
   - Arguments: `--host` (default `"127.0.0.1"`), `--port` (type=int, default `8000`), `--reload` (action `"store_true"`), `--agents-file` (default `"handlers.py"`).
   - In command dispatch, add `elif args.command == "slack-server":`.
-  - Import uvicorn inside the block.
+  - Import uvicorn and `dotenv` inside the block.
+  - Call `dotenv.load_dotenv()` — this loads `SLACK_BOT_TOKEN` and `SLACK_BOT_USER_ID` from `.env` into `os.environ`.
   - Set `os.environ["ANTHILL_AGENTS_FILE"] = args.agents_file`.
-  - Call `uvicorn.run("anthill.slack_server:app", host=args.host, port=args.port, reload=args.reload)`.
-- In `src/anthill/slack_server.py`, at module level: `app = create_slack_app()` — this is what uvicorn imports.
+  - Call `uvicorn.run("anthill.server:app", host=args.host, port=args.port, reload=args.reload)`.
 - Update the `main()` docstring to document the new subcommand.
 
 ### Step 5: Write SlackChannel tests
@@ -205,7 +229,7 @@ types:
 ### Step 6: Write Slack server tests
 
 - Create `tests/test_slack_server.py` using FastAPI TestClient.
-- Fixture `slack_client`: creates temp-dir `App` with a test handler, patches env vars (`SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, `SLACK_COOLDOWN_SECONDS=0`), calls `create_slack_app(agents_path)`, yields `TestClient(api)`. Setting cooldown to 0 makes tests deterministic. Mock `slack_api` to capture calls without hitting real Slack.
+- Fixture `slack_client`: creates temp-dir `App` with a test handler, patches env vars (`SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID`, `SLACK_COOLDOWN_SECONDS=0`), calls `create_app(agents_path)`, yields `TestClient(api)`. Setting cooldown to 0 makes tests deterministic. Mock `slack_api` to capture calls without hitting real Slack.
 
   - `test_url_verification_returns_challenge`: POST `{"type": "url_verification", "challenge": "abc123"}`. Assert 200 and `{"challenge": "abc123"}` in response.
   - `test_bot_self_message_ignored`: POST event with `bot_id` set. Assert 200, no pending entry, no timer started.
@@ -301,7 +325,7 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 ## Notes
 
 - **Sync httpx in SlackChannel, async httpx in server:** The channel uses sync `httpx.Client` because handler code is synchronous (runs in threadpool via `BackgroundTasks`). The server endpoint uses async `httpx.AsyncClient` because it runs on the async event loop. These are independent — the channel never shares an HTTP client with the server.
-- **Pending store is closure-scoped:** The `pending` dict is created inside `create_slack_app()` and captured by the endpoint closure. Each call to `create_slack_app()` gets a fresh store. This enables test isolation without module-level mutable state.
+- **Pending store is closure-scoped:** The `pending` dict is created inside `setup_slack_routes()` and captured by the endpoint closure. Each call to `setup_slack_routes()` gets a fresh store. This enables test isolation without module-level mutable state.
 - **Cooldown of 0 in tests:** Setting `SLACK_COOLDOWN_SECONDS=0` makes the timer fire immediately after `asyncio.sleep(0)`, which yields control once and then processes. Tests use a brief `asyncio.sleep(0.1)` to allow the timer task to complete.
 - **No thread safety concerns:** The pending store is accessed only from async handlers on FastAPI's single-threaded event loop. Asyncio is cooperative — no concurrent access within a single coroutine execution. No locks needed.
 - **Duplicate event suppression:** Slack sends both `app_mention` and `message` events for the same @mention. The `(channel_id, ts)` key naturally deduplicates — the second event finds the key already exists and skips.
@@ -310,4 +334,4 @@ IMPORTANT: If any of the checks above fail you must investigate and fix the erro
 
 ## Report
 
-Files changed: `src/anthill/cli.py` (add `slack-server` subcommand), `pyproject.toml` (add `httpx` and `python-dotenv` to main deps). Files created: `src/anthill/channels/slack.py` (SlackChannel), `src/anthill/slack_server.py` (Slack event endpoint + debounce + factory), `tests/channels/test_slack_channel.py` (5 tests), `tests/test_slack_server.py` (12 tests). Tests added: 17 total. Validations: pytest, ruff, ty, just. Core unchanged: domain.py, runner.py, app.py, server.py.
+Files changed: `src/anthill/server.py` (refactored to orchestrator, delegates to `http` package), `src/anthill/cli.py` (add `slack-server` subcommand), `pyproject.toml` (add `httpx` and `python-dotenv` to main deps). Files created: `src/anthill/http/__init__.py`, `src/anthill/http/webhook.py` (extracted from `server.py`), `src/anthill/http/slack_events.py` (Slack event routing, pending store, debounce, `setup_slack_routes`), `src/anthill/channels/slack.py` (SlackChannel), `tests/channels/test_slack_channel.py` (5 tests), `tests/test_slack_server.py` (12 tests). Tests added: 17 total. Validations: pytest, ruff, ty, just. Core unchanged: domain.py, runner.py, app.py.
