@@ -37,8 +37,8 @@ class TestChannel:
 
 @pytest.fixture
 def app():
-    """Provide a fresh App with logs and worktrees directed to temp directories."""
-    return App(log_dir=tempfile.mkdtemp(), worktree_dir=tempfile.mkdtemp())
+    """Provide a fresh App with logs, worktrees, and state directed to temp directories."""
+    return App(log_dir=tempfile.mkdtemp(), worktree_dir=tempfile.mkdtemp(), state_dir=tempfile.mkdtemp())
 
 
 @pytest.fixture

@@ -32,6 +32,14 @@ class TestAppConfiguration:
         """Test that App(worktree_dir=...) stores the custom value."""
         assert App(worktree_dir="/tmp/wt").worktree_dir == "/tmp/wt"
 
+    def test_app_state_dir_defaults_to_anthill_state(self):
+        """Test that App().state_dir defaults to '.anthill/state/'."""
+        assert App().state_dir == ".anthill/state/"
+
+    def test_app_state_dir_accepts_custom_value(self):
+        """Test that App(state_dir=...) stores the custom value."""
+        assert App(state_dir="/tmp/state").state_dir == "/tmp/state"
+
 
 class TestRunnerLogFileCreation:
     def test_runner_creates_log_directory(self, app, runner_factory):
