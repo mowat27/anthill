@@ -42,7 +42,9 @@ class TestArgParsing:
         run_p = sub.add_parser("run")
         run_p.add_argument("--agents-file", default="handlers.py")
         run_p.add_argument("--initial-state", action="append", default=[])
-        run_p.add_argument("--prompt", default=None)
+        prompt_group = run_p.add_mutually_exclusive_group()
+        prompt_group.add_argument("--prompt", default=None)
+        prompt_group.add_argument("--prompt-file", default=None)
         run_p.add_argument("--model", default=None)
         run_p.add_argument("workflow_name")
         return parser
@@ -66,6 +68,16 @@ class TestArgParsing:
         """Test that custom agents file path is correctly parsed."""
         args = self._build_parser().parse_args(["run", "--agents-file", "custom.py", "my_handler"])
         assert args.agents_file == "custom.py"
+
+    def test_parse_run_with_prompt_file_flag(self):
+        """Test that --prompt-file flag is parsed."""
+        args = self._build_parser().parse_args(["run", "--prompt-file", "foo.txt", "my_handler"])
+        assert args.prompt_file == "foo.txt"
+
+    def test_prompt_and_prompt_file_mutually_exclusive(self):
+        """Test that providing both --prompt and --prompt-file causes parser to exit."""
+        with pytest.raises(SystemExit):
+            self._build_parser().parse_args(["run", "--prompt", "x", "--prompt-file", "y", "my_handler"])
 
     def test_parse_run_missing_workflow_name_exits(self):
         """Test that missing workflow name argument causes parser to exit."""
@@ -104,6 +116,77 @@ class TestCliIntegration:
             main()
             captured = capsys.readouterr()
             assert "11" in captured.out
+        finally:
+            os.unlink(agents_path)
+
+    def test_prompt_file_loaded_into_state(self, monkeypatch, capsys):
+        """Test that --prompt-file reads file contents into state['prompt']."""
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
+            from anthill.core.app import App
+            from anthill.core.domain import State
+
+            app = App(log_dir="{log_dir}")
+
+            @app.handler
+            def echo(runner, state: State) -> State:
+                return {{**state, "result": f"prompt={{state['prompt']}}"}}
+        """)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(agents_code)
+            f.flush()
+            agents_path = f.name
+
+        prompt_content = "hello from file"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as pf:
+            pf.write(prompt_content)
+            pf.flush()
+            prompt_path = pf.name
+
+        try:
+            monkeypatch.setattr("sys.argv", [
+                "anthill", "run",
+                "--agents-file", agents_path,
+                "--prompt-file", prompt_path,
+                "echo",
+            ])
+            main()
+            captured = capsys.readouterr()
+            assert "prompt=hello from file" in captured.out
+        finally:
+            os.unlink(agents_path)
+            os.unlink(prompt_path)
+
+    def test_prompt_file_not_found_exits(self, monkeypatch, capsys):
+        """Test that --prompt-file with nonexistent path prints error and exits 1."""
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
+            from anthill.core.app import App
+            from anthill.core.domain import State
+
+            app = App(log_dir="{log_dir}")
+
+            @app.handler
+            def echo(runner, state: State) -> State:
+                return state
+        """)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(agents_code)
+            f.flush()
+            agents_path = f.name
+
+        try:
+            monkeypatch.setattr("sys.argv", [
+                "anthill", "run",
+                "--agents-file", agents_path,
+                "--prompt-file", "/nonexistent/path/prompt.md",
+                "echo",
+            ])
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "prompt file not found" in captured.err.lower()
         finally:
             os.unlink(agents_path)
 

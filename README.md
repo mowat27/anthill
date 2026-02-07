@@ -17,7 +17,10 @@ uv sync
 anthill run --agents-file handlers.py --initial-state result=5 plus_1
 
 # Run an LLM workflow with prompt and model
-anthill run --agents-file handlers.py --prompt "describe this project" --model sonnet specify
+anthill run --prompt "describe this project" --model sonnet specify
+
+# Run with prompt from file (mutually exclusive with --prompt)
+anthill run --prompt-file prompts/describe.md --model sonnet specify
 ```
 
 ## Project Structure

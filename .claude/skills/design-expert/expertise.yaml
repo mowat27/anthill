@@ -61,6 +61,14 @@ architecture:
         - errors.py     # AgentExecutionError
         - claude_code.py  # ClaudeCodeAgent (subprocess-based)
 
+    - name: helpers
+      path: src/anthill/helpers/
+      responsibility: >
+        Shared utility functions. Currently contains JSON extraction for
+        parsing LLM responses that embed JSON in markdown or prose.
+      modules:
+        - json.py  # extract_json — finds first {…} in text, parses as JSON
+
     - name: cli
       path: src/anthill/cli.py
       responsibility: >
@@ -191,19 +199,24 @@ cli_entry_point:
       args:
         - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
         - "--initial-state key=val (repeatable) — seed state pairs"
-        - "--prompt — user prompt string, stored as state['prompt']"
+        - "--prompt — user prompt string, stored as state['prompt'] (mutually exclusive with --prompt-file)"
+        - "--prompt-file — path to file whose contents become state['prompt'] (mutually exclusive with --prompt)"
         - "--model — model identifier, stored as state['model']"
         - "workflow_name (positional) — workflow name to invoke"
+      mutual_exclusion: "--prompt and --prompt-file are in an argparse mutually exclusive group"
       flow: >
         1. load_app() dynamically imports the agents file via importlib
         2. parse_state_pairs() splits key=val strings into dict
-        3. Merges --prompt and --model into state dict if provided
-        4. Builds CliChannel with workflow_name, initial_state=dict
-        5. Creates Runner(app, channel) and calls runner.run()
-        6. Prints result dict to stdout
+        3. If --prompt provided, sets state['prompt'] to the string value
+        4. If --prompt-file provided, reads file via Path.read_text() into state['prompt']
+        5. Merges --model into state dict if provided
+        6. Builds CliChannel with workflow_name, initial_state=dict
+        7. Creates Runner(app, channel) and calls runner.run()
+        8. Prints result dict to stdout
       error_handling:
         - "FileNotFoundError → agents file not found"
         - "AttributeError → agents file has no 'app'"
+        - "FileNotFoundError → prompt file not found (--prompt-file)"
         - "Invalid state pair (no '=') → stderr + exit(1)"
   no_subcommand: "Prints help and exits 0"
 
@@ -253,8 +266,9 @@ testing_design:
     - tests/core/test_workflows.py — core engine paths (single, multi-step, failure, unknown)
     - tests/core/test_logging.py — per-run file logging verification
     - tests/channels/test_cli_channel.py — CliChannel initial_state and attribute tests
-    - tests/test_cli.py — CLI arg parsing and integration (temp agents file)
+    - tests/test_cli.py — CLI arg parsing, mutual exclusion, prompt-file loading, integration
     - tests/llm/test_claude_code_agent.py — ClaudeCodeAgent subprocess and error handling
+    - tests/helpers/test_extract_json.py — JSON extraction from LLM responses
 
 key_design_decisions:
   - >
@@ -276,7 +290,9 @@ key_design_decisions:
     Agent is a Protocol, like Channel. New LLM backends implement prompt(str)->str.
     ClaudeCodeAgent delegates to the `claude` CLI via subprocess.
   - >
-    CLI passes --prompt and --model into state dict. Handlers read these from
+    CLI passes --prompt (or --prompt-file) and --model into state dict.
+    --prompt and --prompt-file are mutually exclusive; file contents are
+    resolved in cli.py before reaching the channel. Handlers read from
     state, keeping the Runner/Channel layer unaware of LLM concerns.
   - >
     Errors propagate by default. Handler errors (missing keys), runtime issues

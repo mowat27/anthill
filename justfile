@@ -10,3 +10,6 @@ ty:
 
 test:
   uv run pytest
+
+sdlc prompt model="opus":
+  uv run anthill run sdlc --model {{model}} --prompt "{{prompt}}"

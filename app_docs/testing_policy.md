@@ -78,6 +78,23 @@ tests/
 └── test_cli.py        # Tests for src/anthill/cli.py
 ```
 
+### CLI Testing Patterns
+
+CLI tests are split into two categories:
+
+**Argument parsing tests** (`TestArgParsing`) - Test argparse behavior in isolation:
+- Build a parser mirror in `_build_parser()` to avoid loading the full CLI machinery
+- Test flag parsing, mutual exclusion, and invalid input handling
+- Use `pytest.raises(SystemExit)` for argparse error cases
+
+**Integration tests** (`TestCliIntegration`) - Test end-to-end CLI execution:
+- Create temp files for handlers and input files
+- Use `monkeypatch.setattr("sys.argv", ...)` to simulate CLI invocation
+- Use `capsys` to capture stdout/stderr
+- Clean up temp files in `finally` blocks
+
+For file-based inputs (e.g., `--prompt-file`), integration tests should write known content to a temp file and verify it flows through to the handler state.
+
 ## Fixture Management
 
 All shared fixtures live in `tests/conftest.py`:
