@@ -14,6 +14,14 @@ class Agent(Protocol):
     Implementations must provide a prompt() method that accepts a string
     and returns the LLM's response. The protocol allows for dependency
     injection and easy testing via mock agents.
+
+    Example:
+        >>> class MockAgent:
+        ...     def prompt(self, prompt: str) -> str:
+        ...         return "mock response"
+        >>> agent = MockAgent()
+        >>> agent.prompt("test")
+        'mock response'
     """
 
     def prompt(self, prompt: str) -> str:

@@ -15,6 +15,7 @@ The `Runner` delegates to the `Channel`, which formats and outputs the message b
 
 - **CliChannel**: Writes to stdout with format `[workflow_name, run_id] message`
 - **ApiChannel**: Writes to stdout with format `[workflow_name, run_id] message` (appears in server logs)
+- **SlackChannel**: Posts to Slack thread via httpx sync POST with format `[workflow_name, run_id] message`
 - **TestChannel**: Appends to `progress_messages` list for verification
 
 ## Error Reporting
@@ -32,7 +33,7 @@ if "required_key" not in state:
     runner.fail("Missing required_key in state")
 ```
 
-`fail()` raises `WorkflowFailedError` with the message. The CLI catches this exception, prints to stderr, and exits with code 1. API channels log the error and allow the server to continue.
+`fail()` raises `WorkflowFailedError` with the message. The CLI catches this exception, prints to stderr, and exits with code 1. API channels log the error and allow the server to continue. SlackChannel posts error messages to the thread with `[ERROR]` prefix: `[workflow_name, run_id] [ERROR] message`.
 
 ## Run Identification
 
@@ -121,7 +122,7 @@ def my_step(runner: Runner, state: State) -> State:
 
 ### Module-Level Loggers
 
-Module-level loggers exist in `cli.py`, `channels/cli.py`, and `llm/claude_code.py`. These only produce output if a user configures handlers on them or their parents — they serve as extension points for additional logging.
+Module-level loggers exist in `cli.py`, `channels/cli.py`, `channels/slack.py`, and `llm/claude_code.py`. These only produce output if a user configures handlers on them or their parents — they serve as extension points for additional logging.
 
 ## LLM Agent Execution
 

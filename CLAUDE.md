@@ -2,7 +2,7 @@
 
 Workflow engine. `@app.handler` registers handlers, `Runner` executes them.
 
-**State** = `dict[str, Any]`, return new copy. **Channel** = I/O boundary (CliChannel, ApiChannel). **App** = handler registry. **Runner** = App + Channel. **Agent** = LLM wrapper (`ClaudeCodeAgent` wraps `claude` CLI). **Worktree** = git worktree wrapper.
+**State** = `dict[str, Any]`, return new copy. **Channel** = I/O boundary (CliChannel, ApiChannel, SlackChannel). **App** = handler registry. **Runner** = App + Channel. **Agent** = LLM wrapper (`ClaudeCodeAgent` wraps `claude` CLI). **Worktree** = git worktree wrapper.
 
 Handlers: `def step(runner: Runner, state: State) -> State`. Chain via `run_workflow(runner, state, [step1, step2])`.
 
@@ -10,7 +10,7 @@ Handlers: `def step(runner: Runner, state: State) -> State`. Chain via `run_work
 
 **Git worktrees**: `Worktree(base_dir, name)`. `git_worktree(wt, create=True, branch="feat", remove=False)` context manager guarantees cwd restore. Paths absolute.
 
-**API server**: `anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py`. POST `/webhook` with `{"workflow_name": "wf", "initial_state": {}}`, returns `{"run_id": "..."}`. Runs background task.
+**HTTP layer**: `http/` package: `webhook.py` (POST `/webhook`), `slack_events.py` (POST `/slack_event`). `server.py` orchestrates. Slack needs env vars `SLACK_BOT_TOKEN`, `SLACK_BOT_USER_ID` (via `.env`).
 
 ## Testing
 - Tests mirror source: `tests/core/`, `tests/channels/`, `tests/llm/`, `tests/git/`

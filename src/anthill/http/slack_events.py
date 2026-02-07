@@ -20,19 +20,58 @@ logger = logging.getLogger("anthill.http.slack_events")
 
 
 def is_bot_message(event: dict) -> bool:
+    """Check if a Slack event is from a bot.
+
+    Args:
+        event: Slack event dictionary.
+
+    Returns:
+        True if the event contains a bot_id field, False otherwise.
+    """
     return bool(event.get("bot_id"))
 
 
 def is_bot_mention(text: str, bot_user_id: str) -> bool:
+    """Check if text contains a mention of the bot user.
+
+    Args:
+        text: Message text to check.
+        bot_user_id: Slack user ID of the bot.
+
+    Returns:
+        True if the text contains a mention of the bot user ID, False otherwise.
+    """
     return f"<@{bot_user_id}>" in text
 
 
 def strip_mention(text: str) -> str:
+    """Remove bot mention from the beginning of text.
+
+    Args:
+        text: Message text potentially containing a bot mention.
+
+    Returns:
+        Text with leading bot mention and surrounding whitespace removed.
+    """
     return re.sub(r"^\s*<@U[A-Z0-9]+>\s*", "", text)
 
 
 @dataclass
 class PendingMessage:
+    """Represents a Slack message waiting for debounce timer.
+
+    Accumulates edits and thread replies while a cooldown timer is active.
+    Once the timer fires, dispatches the accumulated message to a workflow.
+
+    Attributes:
+        channel_id: Slack channel ID where the message was posted.
+        ts: Slack timestamp identifier for the message.
+        user: Slack user ID who sent the message.
+        text: Accumulated message text (updated on edits and thread replies).
+        files: List of file attachments from the message and thread replies.
+        workflow_name: Name of the workflow handler to dispatch to.
+        timer_task: Active asyncio timer task, or None if not running.
+    """
     channel_id: str
     ts: str
     user: str
@@ -43,6 +82,16 @@ class PendingMessage:
 
 
 async def slack_api(token: str, method: str, payload: dict) -> dict:
+    """Call a Slack API method with the given payload.
+
+    Args:
+        token: Slack bot token for authorization.
+        method: Slack API method name (e.g., "chat.postMessage").
+        payload: JSON payload to send in the request body.
+
+    Returns:
+        JSON response from the Slack API as a dictionary.
+    """
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"https://slack.com/api/{method}",
@@ -53,6 +102,21 @@ async def slack_api(token: str, method: str, payload: dict) -> dict:
 
 
 def setup_slack_routes(api: FastAPI, anthill_app: App) -> None:
+    """Register Slack event handling endpoint on the FastAPI application.
+
+    Creates a POST /slack_event endpoint that handles Slack Events API callbacks.
+    Implements debounced message processing with support for message edits,
+    thread replies, and deletions.
+
+    Args:
+        api: FastAPI application instance to register routes on.
+        anthill_app: Anthill App instance containing registered workflow handlers.
+
+    Environment Variables:
+        SLACK_BOT_TOKEN: Slack bot OAuth token for API calls.
+        SLACK_BOT_USER_ID: Slack user ID of the bot for mention detection.
+        SLACK_COOLDOWN_SECONDS: Debounce timer duration in seconds (default: 30).
+    """
     from anthill.server import _run_workflow
 
     pending: dict[tuple[str, str], PendingMessage] = {}

@@ -1,6 +1,24 @@
 """FastAPI server for Anthill workflows.
 
-Orchestrates route registration for webhook and Slack event endpoints.
+This module provides the FastAPI application server for executing Anthill
+workflows via HTTP endpoints. It orchestrates route registration for:
+- /webhook: Generic webhook endpoint for triggering workflows
+- /slack_event: Slack Events API endpoint for handling Slack interactions
+
+The server loads an Anthill app from a Python file and creates a FastAPI
+instance with configured routes. Workflows run as background tasks to
+ensure non-blocking HTTP responses.
+
+Environment Variables:
+    ANTHILL_AGENTS_FILE: Path to Python file containing the app
+        (default: handlers.py)
+
+Example:
+    Start the server via CLI:
+        anthill server --host 0.0.0.0 --port 8000 --agents-file handlers.py
+
+    Or run directly with uvicorn:
+        uvicorn anthill.server:app --host 0.0.0.0 --port 8000
 """
 import os
 import sys
@@ -55,3 +73,10 @@ def create_app(agents_file: str = os.environ.get("ANTHILL_AGENTS_FILE", "handler
 
 
 app = create_app()
+"""FastAPI application instance configured with Anthill workflow routes.
+
+This is the ASGI application instance that should be passed to uvicorn or
+other ASGI servers. It is created by calling create_app() with default
+parameters (reading from ANTHILL_AGENTS_FILE environment variable or
+using "handlers.py" as the default agents file).
+"""

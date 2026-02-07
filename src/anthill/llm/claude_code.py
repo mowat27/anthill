@@ -19,6 +19,13 @@ class ClaudeCodeAgent:
     This agent implementation shells out to the `claude` binary installed
     on the system. It constructs appropriate command-line arguments, handles
     subprocess execution, and converts CLI errors into AgentExecutionErrors.
+
+    Attributes:
+        model: Optional model identifier passed to the Claude CLI via --model flag.
+
+    Example:
+        >>> agent = ClaudeCodeAgent(model="claude-opus-4")
+        >>> response = agent.prompt("What is 2+2?")
     """
 
     def __init__(self, model: str | None = None) -> None:
@@ -26,7 +33,7 @@ class ClaudeCodeAgent:
 
         Args:
             model: Optional model identifier to pass to the Claude CLI
-                via the --model flag.
+                via the --model flag. If None, uses the CLI's default model.
         """
         self.model = model
         logger.debug(f"ClaudeCodeAgent initialized: model={self.model}")
