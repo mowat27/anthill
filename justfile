@@ -11,6 +11,9 @@ ty:
 test:
   uv run pytest
 
+server:
+  uv run anthill server
+
 check_api host="127.0.0.1" port="8000":
   curl -s -X POST http://{{host}}:{{port}}/webhook \
     -H "Content-Type: application/json" \
