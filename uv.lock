@@ -25,34 +25,51 @@ name = "antkeeper"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "python-dotenv" },
+]
+
+[package.optional-dependencies]
+all = [
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "python-dotenv" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+server = [
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+slack = [
+    { name = "httpx" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "pytest" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "fastapi" },
-    { name = "httpx" },
+    { name = "antkeeper", extras = ["server", "slack"], marker = "extra == 'all'" },
+    { name = "fastapi", marker = "extra == 'server'" },
+    { name = "httpx", marker = "extra == 'slack'" },
     { name = "python-dotenv" },
-    { name = "ruff" },
-    { name = "ty" },
-    { name = "uvicorn", extras = ["standard"] },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'" },
 ]
+provides-extras = ["server", "slack", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "pytest" },
+    { name = "ruff" },
+    { name = "ty" },
+    { name = "uvicorn", extras = ["standard"] },
 ]
 
 [[package]]
