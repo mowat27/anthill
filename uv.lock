@@ -25,27 +25,23 @@ name = "antkeeper"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "python-dotenv" },
 ]
 
 [package.optional-dependencies]
 all = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 server = [
     { name = "fastapi" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-slack = [
-    { name = "httpx" },
-]
 
 [package.dev-dependencies]
 dev = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
@@ -54,18 +50,17 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "antkeeper", extras = ["server", "slack"], marker = "extra == 'all'" },
+    { name = "antkeeper", extras = ["server"], marker = "extra == 'all'" },
     { name = "fastapi", marker = "extra == 'server'" },
-    { name = "httpx", marker = "extra == 'slack'" },
+    { name = "httpx" },
     { name = "python-dotenv" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'" },
 ]
-provides-extras = ["server", "slack", "all"]
+provides-extras = ["server", "all"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
