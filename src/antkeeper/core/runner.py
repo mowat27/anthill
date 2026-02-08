@@ -72,7 +72,7 @@ class Runner:
 
         # Set up per-run state file
         os.makedirs(app.state_dir, exist_ok=True)
-        self._state_path = os.path.join(app.state_dir, f"{timestamp}-{self.id}.json")
+        self._state_path = os.path.realpath(os.path.join(app.state_dir, f"{timestamp}-{self.id}.json"))
         self.logger = logging.getLogger(f"antkeeper.run.{self.id}")
         self.logger.setLevel(logging.DEBUG)
         file_handler = logging.FileHandler(log_path)
