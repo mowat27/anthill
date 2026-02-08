@@ -42,7 +42,6 @@ FOCUS: Git commit(s), files, directories, experts etc. Default to whole system.
   * **app_decs/http_server.md** - documents the http server - endpoints, configuration, design etc at an abstract level but do not overlap with the slack docs below
   * **app_decs/slack.md** - documents the slack integration - configuration on the slack side, runtime behaviour etc
   * **README.md** - developer documentation - how to install and use.  Do not reference other files.  This is just enough for developers to get oriented not a complete instruction manual and they can ask an Agent if they need to learn more.
-  * **CLAUDE.md** - Agent documentation - VERY MINIMAL - 250 tokens max.  Only include things in here that every AGENT absolutely **has** to know to get oriented.  Everything else must be retrieved from other files.  Be consice - sacrifice grammar for the sake of concision. Do not cheat by telling agents to read any additional files.
 * Update `app_decs/README.md` with an index of the files in `app_docs/` and what is covered by each.
 
 IMPORTANT: if any files are not present then create them from scratch by looking at the existing codebase, `README.md` and `CLAUDE.md`.  Move redundant information out of `README.md` and `CLAUDE.md` if it is covered by the new docs.
