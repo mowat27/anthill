@@ -21,6 +21,61 @@ from antkeeper.core.runner import Runner
 
 logger = logging.getLogger("antkeeper.cli")
 
+HANDLERS_TEMPLATE = '''\
+"""Antkeeper workflow handlers.
+
+Define handlers with @app.handler and chain them with run_workflow().
+Run a handler:  antkeeper run <handler_name>
+Start the API:  antkeeper server
+"""
+
+from datetime import datetime
+
+from antkeeper.core.app import App, run_workflow
+from antkeeper.core.runner import Runner
+from antkeeper.core.domain import State
+from antkeeper.git.worktrees import Worktree, git_worktree
+
+app = App()
+
+
+@app.handler
+def healthcheck(runner: Runner, state: State) -> State:
+    """Verify the pipeline is working."""
+    runner.report_progress("Running healthcheck")
+    runner.logger.info("healthcheck ok")
+    return {**state, "status": "ok"}
+
+
+# --- Workflow composition example ---
+#
+# @app.handler
+# def step_one(runner: Runner, state: State) -> State:
+#     runner.report_progress("Step one")
+#     return {**state, "step": 1}
+#
+# @app.handler
+# def step_two(runner: Runner, state: State) -> State:
+#     runner.report_progress("Step two")
+#     return {**state, "step": 2}
+#
+# @app.handler
+# def my_workflow(runner: Runner, state: State) -> State:
+#     return run_workflow(runner, state, [step_one, step_two])
+
+
+# --- Worktree isolation example ---
+#
+# @app.handler
+# def isolated_workflow(runner: Runner, state: State) -> State:
+#     """Run steps inside an isolated git worktree."""
+#     worktree_name = f"{datetime.now().strftime(\'%Y%m%d%H%M%S\')}-{runner.id}"
+#     wt = Worktree(base_dir=runner.app.worktree_dir, name=worktree_name)
+#     with git_worktree(wt, create=True, branch="feat/my-feature", remove=False):
+#         state = run_workflow(runner, state, [step_one, step_two])
+#     return {**state, "worktree_path": wt.path}
+'''
+
 
 def load_app(path: str):
     """Dynamically load an Antkeeper app from a Python file.
@@ -124,6 +179,9 @@ def main() -> None:
     server_parser.add_argument("--reload", action="store_true")
     server_parser.add_argument("--agents-file", default="handlers.py")
 
+    init_parser = subparsers.add_parser("init")
+    init_parser.add_argument("path", nargs="?", default=".")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -168,6 +226,35 @@ def main() -> None:
             sys.exit(1)
         logger.info("Workflow run complete")
         print(result)
+
+    elif args.command == "init":
+        path = os.path.realpath(args.path)
+        target = os.path.join(path, "handlers.py")
+        if os.path.exists(target):
+            print(f"Error: handlers.py already exists in {path}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            with open(target, "w") as f:
+                f.write(HANDLERS_TEMPLATE)
+        except FileNotFoundError:
+            print(f"Error: directory does not exist: {path}", file=sys.stderr)
+            sys.exit(1)
+        except PermissionError:
+            print(f"Error: no write permission for {path}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Created handlers.py in {path}")
+        print()
+        print("Run your first workflow:")
+        print("  antkeeper run healthcheck")
+        print()
+        print("Start the API server:")
+        print("  antkeeper server")
+        print()
+        print("Environment variables:")
+        print("  ANTKEEPER_HANDLERS_FILE  Path to handlers file (default: handlers.py)")
+        print("  SLACK_BOT_TOKEN          Slack bot OAuth token (for Slack channel)")
+        print("  SLACK_BOT_USER_ID        Slack bot user ID (for Slack channel)")
+        print("  SLACK_COOLDOWN_SECONDS   Slack debounce cooldown in seconds (default: 30)")
 
     elif args.command == "server":
         import uvicorn
