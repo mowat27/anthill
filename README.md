@@ -7,14 +7,11 @@ A lightweight Python workflow engine. Define handlers (workflow steps) via a dec
 ### From PyPI
 
 ```bash
-# Core package (python-dotenv only)
+# Core package (python-dotenv, httpx for Slack support)
 pip install antkeeper
 
-# With server support (FastAPI + uvicorn)
+# With server support (adds FastAPI + uvicorn)
 pip install antkeeper[server]
-
-# With Slack integration (httpx)
-pip install antkeeper[slack]
 
 # All extras
 pip install antkeeper[all]
@@ -41,7 +38,14 @@ uv pip install ".[all]"  # All extras
 ## Quickstart
 
 ```bash
-# Install dependencies
+# Create a new project with starter handlers
+antkeeper init my-project
+cd my-project
+
+# Run the healthcheck workflow
+antkeeper run healthcheck
+
+# Or manually install dependencies and create handlers
 uv sync
 
 # Run a workflow via CLI
@@ -250,6 +254,11 @@ Log format: `YYYY-MM-DD HH:MM:SS,mmm [LEVEL] antkeeper.run.{run_id} - message`
 Logs do not appear in stdout/stderr (propagation disabled).
 
 ### CLI Commands
+
+**antkeeper init** - Scaffold a new project:
+- `antkeeper init [path]` - Create a handlers.py file with starter workflows and examples (defaults to current directory)
+- Generates a working `healthcheck` handler, commented examples for workflow composition and worktree isolation
+- Prints guidance for environment variables (server and Slack integration)
 
 **antkeeper run** - Execute a workflow via CLI:
 - `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)

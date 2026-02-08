@@ -18,6 +18,8 @@ Handlers: `def step(runner: Runner, state: State) -> State`. Chain: `run_workflo
 
 **Slack is a first-class citizen**: All Slack functionality is a core part of the framework, not an optional extra. Treat it the same as CLI or API channels.
 
+**Init**: `antkeeper init [path]` scaffolds handlers.py with healthcheck, examples.
+
 **Worktree discipline**: Edit relative to cwd, never IDE paths outside worktree.
 
 **Dev**: `just` = lint+typecheck+test. `uv sync` to install.

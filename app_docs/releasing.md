@@ -8,19 +8,19 @@ Antkeeper uses a split dependency model to minimize the installation footprint f
 
 ### Core Dependencies
 
-The base package (`pip install antkeeper`) only requires:
+The base package (`pip install antkeeper`) requires:
 - `python-dotenv` - Environment variable loading
+- `httpx` - HTTP client for Slack integration
 
-This minimal footprint allows users to build CLI workflows without pulling in server or HTTP dependencies.
+Slack functionality is first-class (not optional), ensuring reliable thread-based workflow dispatch for all users.
 
 ### Optional Dependencies
 
-Additional features are installed via extras:
+Server features are installed via extras:
 
 ```bash
 pip install antkeeper[server]  # Adds FastAPI + uvicorn
-pip install antkeeper[slack]   # Adds httpx
-pip install antkeeper[all]     # Installs all extras
+pip install antkeeper[all]     # Installs all extras (equivalent to [server])
 ```
 
 Defined in `pyproject.toml`:
@@ -28,8 +28,7 @@ Defined in `pyproject.toml`:
 ```toml
 [project.optional-dependencies]
 server = ["fastapi", "uvicorn[standard]"]
-slack = ["httpx"]
-all = ["antkeeper[server,slack]"]
+all = ["antkeeper[server]"]
 ```
 
 ### Development Dependencies
@@ -38,10 +37,10 @@ Development tools (linters, type checkers, test framework) are defined in `[depe
 
 ```toml
 [dependency-groups]
-dev = ["pytest", "httpx", "fastapi", "uvicorn[standard]", "ruff", "ty"]
+dev = ["pytest", "fastapi", "uvicorn[standard]", "ruff", "ty"]
 ```
 
-Note that `httpx` appears in both `dev` (for tests using `TestClient`) and the `slack` extra (for `SlackChannel` runtime). This is intentional.
+`httpx` is now a core dependency, available in both production and dev environments.
 
 ## Public API
 
@@ -63,7 +62,7 @@ from antkeeper import (
 )
 ```
 
-Classes that depend on optional dependencies (`ApiChannel`, `SlackChannel`) are included in the public API. They import successfully (they're just class definitions), but attempting to use them without the corresponding extras installed will fail at runtime when they try to import `fastapi` or `httpx`.
+Classes that depend on optional dependencies (`ApiChannel`) are included in the public API. They import successfully (they're just class definitions), but attempting to use them without the corresponding extras installed will fail at runtime when they try to import `fastapi`. `SlackChannel` is always available since `httpx` is a core dependency.
 
 ## Entry Points
 
@@ -182,10 +181,10 @@ Before publishing to PyPI:
 1. **Update version** in `pyproject.toml`
 2. **Run quality checks**: `just` (lint + typecheck + test)
 3. **Verify imports**: `python -c "from antkeeper import App, Runner, run_workflow, CliChannel, State, Channel, WorkflowFailedError, ApiChannel, SlackChannel, Worktree, git_worktree; print('All imports OK')"`
-4. **Test CLI invocation**: `python -m antkeeper` (should print help)
+4. **Test CLI invocation**: `python -m antkeeper` (should print help), `antkeeper init` (should scaffold handlers.py)
 5. **Build package**: `uv build`
 6. **Test installation**: `uv pip install dist/antkeeper-*.whl` in a fresh venv
-7. **Test extras**: Install with `[server]` and `[slack]` extras, verify runtime functionality
+7. **Test extras**: Install with `[server]` extra, verify API server starts
 8. **Commit and tag**: `git tag v0.1.0 && git push --tags`
 9. **Publish to PyPI**: `uv publish` (requires PyPI credentials)
 
@@ -216,13 +215,14 @@ After publishing, verify the package is installable from PyPI:
 uv venv test-env
 source test-env/bin/activate
 pip install antkeeper
-python -c "from antkeeper import App; print('Core install OK')"
+python -c "from antkeeper import App, SlackChannel; print('Core install OK')"
 
 pip install antkeeper[server]
 python -c "from antkeeper import ApiChannel; print('Server extras OK')"
 
-pip install antkeeper[slack]
-python -c "from antkeeper import SlackChannel; print('Slack extras OK')"
+# Test init subcommand
+antkeeper init test-project
+test -f test-project/handlers.py && echo "Scaffolding OK"
 ```
 
 ## Version Numbering
