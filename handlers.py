@@ -107,8 +107,12 @@ def derive_feature(runner: Runner, state: State) -> State:
     response = agent.prompt(prompt)
     runner.logger.info(f"derive_feature response: {response}")
     parsed = extract_json(response)
-    runner.report_progress("Feature metadata derived")
-    return {**state, "feature_type": parsed["feature_type"], "slug": parsed["slug"]}
+
+    feature_type = parsed["feature_type"]
+    slug = parsed["slug"]
+    runner.report_progress(
+        f"Derived: feature_type={feature_type}, slug={slug}")
+    return {**state, "feature_type": feature_type, "slug": slug}
 
 
 # --- Shared workflow constants ---
