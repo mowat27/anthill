@@ -42,7 +42,10 @@ class App:
         state_dir: Directory path where Runner instances will write state files.
     """
     def __init__(self, log_dir: str = "agents/logs/", worktree_dir: str = "trees/", state_dir: str = ".antkeeper/state/") -> None:
-        """Initialize a new App instance with an empty handler registry.
+        """Initialize a new App instance.
+
+        Creates an empty handler registry and sets directory paths for logs,
+        worktrees, and state files that will be used by Runner instances.
 
         Args:
             log_dir: Directory for log files. Defaults to "agents/logs/".

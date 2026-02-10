@@ -118,16 +118,16 @@ class Runner:
         """Get the workflow name from the channel.
 
         Returns:
-            str: The workflow name string.
+            The workflow name string.
         """
         return self.channel.workflow_name
 
     @property
     def workflow(self) -> Callable:
-        """Get the workflow handler from the app.
+        """Get the workflow handler callable from the app.
 
         Returns:
-            Callable: The workflow handler callable that accepts a Runner and State.
+            The workflow handler function that accepts a Runner and State.
         """
         return self.app.get_handler(self.workflow_name)
 
