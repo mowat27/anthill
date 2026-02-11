@@ -16,7 +16,11 @@ from antkeeper.server import create_app
 
 @pytest.fixture()
 def client():
-    """Create a test client with a temporary agents file."""
+    """Create a test client with a temporary agents file.
+
+    Yields:
+        TestClient: FastAPI test client configured with temporary handlers.
+    """
     log_dir = tempfile.mkdtemp()
     agents_code = textwrap.dedent(f"""\
         from antkeeper.core.app import App, run_workflow

@@ -29,15 +29,32 @@ class TestChannel:
         self.error_messages: list[str] = []
 
     def report_progress(self, run_id: str, message: str, **opts: Any) -> None:
+        """Capture a progress message to the in-memory list.
+
+        Args:
+            run_id: Unique identifier for the workflow run.
+            message: Progress message to capture.
+            **opts: Additional options (ignored by test double).
+        """
         self.progress_messages.append(message)
 
     def report_error(self, run_id: str, message: str) -> None:
+        """Capture an error message to the in-memory list.
+
+        Args:
+            run_id: Unique identifier for the workflow run.
+            message: Error message to capture.
+        """
         self.error_messages.append(message)
 
 
 @pytest.fixture
 def app():
-    """Provide a fresh App with logs, worktrees, and state directed to temp directories."""
+    """Provide a fresh App with logs, worktrees, and state directed to temp directories.
+
+    Returns:
+        App: A configured App instance with isolated temporary directories for testing.
+    """
     return App(log_dir=tempfile.mkdtemp(), worktree_dir=tempfile.mkdtemp(), state_dir=tempfile.mkdtemp())
 
 
@@ -47,9 +64,25 @@ def runner_factory(app):
 
     Returns a factory function that creates a Runner with a TestChannel,
     allowing tests to exercise workflows and inspect captured messages.
+
+    Args:
+        app: The App fixture providing the test application instance.
+
+    Returns:
+        Callable: Factory function that creates (Runner, TestChannel) tuples.
     """
 
     def _create(test_app: App | None = None, workflow_name: str = "test", initial_state: State | None = None):
+        """Create a Runner and TestChannel pair for testing.
+
+        Args:
+            test_app: Optional App instance to use (defaults to fixture app).
+            workflow_name: Name of the workflow being tested.
+            initial_state: Initial state dictionary for the workflow.
+
+        Returns:
+            tuple: (Runner, TestChannel) pair for testing.
+        """
         source = TestChannel(workflow_name, initial_state)
         runner = Runner(test_app or app, source)
         return runner, source

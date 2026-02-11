@@ -1,6 +1,6 @@
 # Antkeeper Framework - Design Expertise
 # Mental model for the antkeeper workflow engine
-# Last validated: 2026-02-10
+# Last validated: 2026-02-11
 
 overview:
   name: antkeeper
@@ -15,13 +15,12 @@ overview:
   entry_point: "antkeeper.cli:main"
   dependencies:
     - python-dotenv (.env file loading)
+    - httpx (Slack API calls, HTTP client — core dependency)
   optional_dependencies:
     server: ["fastapi", "uvicorn[standard]"]
-    slack: ["httpx"]
-    all: ["antkeeper[server,slack]"]
+    all: ["antkeeper[server]"]
   dev_dependencies:
     - pytest (test)
-    - httpx (Slack API calls + FastAPI TestClient)
     - fastapi (web framework)
     - uvicorn[standard] (ASGI server)
     - ruff (lint)
@@ -409,6 +408,23 @@ cli_entry_point:
         because uvicorn.run() imports the module string "antkeeper.server:app" and
         the factory needs the path at import time.
 
+    init:
+      args:
+        - "path (positional, optional, default: '.') — directory to create handlers.py in"
+      flow: >
+        1. Resolves path via os.path.realpath
+        2. Checks if handlers.py already exists at target (exits 1 if so)
+        3. Writes HANDLERS_TEMPLATE to target/handlers.py
+        4. Prints success message with usage instructions (run, server, env vars)
+      error_handling:
+        - "handlers.py already exists -> stderr + exit(1)"
+        - "Directory does not exist (FileNotFoundError) -> stderr + exit(1)"
+        - "No write permission (PermissionError) -> stderr + exit(1)"
+      template: >
+        HANDLERS_TEMPLATE is a module-level string constant in cli.py that provides
+        a starter handlers.py with: imports, App(), a healthcheck handler, and
+        commented-out examples for workflow composition and worktree isolation.
+
   no_subcommand: "Prints help and exits 0"
 
 server_module:
@@ -490,12 +506,12 @@ http_modules:
       - "thread reply (thread_ts != ts, parent in pending) -> cancel timer, append text/files, restart timer, add reaction"
       - "message_changed -> update pending text, restart timer"
       - "message_deleted -> cancel timer, remove pending"
-      - "bot mention (app_mention or message with <@BOT>) -> create PendingMessage, add thumbsup reaction, start debounce timer"
+      - "bot mention (app_mention or message with subtype None or file_share, containing <@BOT>) -> create PendingMessage, add thumbsup reaction, start debounce timer"
       - "all other -> 200"
     debounce_timer:
       behavior: >
         _on_timer_fire: sleeps for cooldown, pops entry from pending,
-        posts "Processing..." in thread, validates workflow exists (posts
+        posts "Processing your request..." in thread, validates workflow exists (posts
         error if not), builds initial_state {prompt, slack_user, files?},
         creates SlackChannel + Runner, runs via
         asyncio.to_thread(run_workflow_background, runner).
@@ -612,7 +628,7 @@ data_flow:
     - "POST /slack_event receives event_callback, bot filters + mention detection"
     - "Creates PendingMessage, adds thumbsup reaction, starts debounce timer"
     - "User can edit message or reply in thread — timer resets, text/files accumulated"
-    - "Timer fires after cooldown — posts 'Processing...' in thread"
+    - "Timer fires after cooldown — posts 'Processing your request...' in thread"
     - "Validates workflow exists, builds initial_state {prompt, slack_user, files?}"
     - "Creates SlackChannel(workflow_name, initial_state, token, channel_id, thread_ts)"
     - "Creates Runner(app, channel), runs via asyncio.to_thread(run_workflow_background)"

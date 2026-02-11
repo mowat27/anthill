@@ -39,7 +39,8 @@ class ApiChannel:
         Args:
             run_id: Unique identifier for the workflow run.
             message: Progress message to report.
-            **opts: Additional options passed to print() function.
+            **opts: Additional keyword arguments passed to print() function
+                (e.g., file=sys.stderr to redirect output).
         """
         print(f"[{self.workflow_name}, {run_id}] {message}", flush=True, **opts)
 

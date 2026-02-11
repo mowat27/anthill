@@ -13,7 +13,11 @@ from antkeeper.server import create_app
 
 @pytest.fixture()
 def slack_client():
-    """Create a test client with Slack env vars and mocked slack_api."""
+    """Create a test client with Slack env vars and mocked slack_api.
+
+    Yields:
+        tuple: (TestClient, AsyncMock) - Test client and mocked Slack API.
+    """
     log_dir = tempfile.mkdtemp()
     state_dir = tempfile.mkdtemp()
     agents_code = textwrap.dedent(f"""\
@@ -54,7 +58,11 @@ def slack_client():
 
 @pytest.fixture()
 def slack_client_no_env():
-    """Create a test client without SLACK_BOT_TOKEN or SLACK_BOT_USER_ID."""
+    """Create a test client without SLACK_BOT_TOKEN or SLACK_BOT_USER_ID.
+
+    Yields:
+        TestClient: FastAPI test client without Slack environment variables.
+    """
     log_dir = tempfile.mkdtemp()
     state_dir = tempfile.mkdtemp()
     agents_code = textwrap.dedent(f"""\
@@ -94,7 +102,18 @@ def slack_client_no_env():
 
 
 def _mention_event(text="<@U_BOT> greet hello", ts="1000.1", channel="C1", user="U_USER", files=None):
-    """Helper to build a Slack app_mention event payload."""
+    """Helper to build a Slack app_mention event payload.
+
+    Args:
+        text: Message text with bot mention. Defaults to "<@U_BOT> greet hello".
+        ts: Message timestamp. Defaults to "1000.1".
+        channel: Channel ID. Defaults to "C1".
+        user: User ID. Defaults to "U_USER".
+        files: Optional list of file attachments. Defaults to None.
+
+    Returns:
+        dict: Slack event callback payload with app_mention event.
+    """
     event = {
         "type": "app_mention",
         "text": text,
@@ -108,7 +127,10 @@ def _mention_event(text="<@U_BOT> greet hello", ts="1000.1", channel="C1", user=
 
 
 class TestSlackEventEndpoint:
+    """Test suite for Slack event endpoint functionality."""
+
     def test_url_verification_returns_challenge(self, slack_client):
+        """Test that URL verification returns challenge string."""
         client, mock = slack_client
         resp = client.post("/slack_event", json={
             "type": "url_verification",
@@ -118,6 +140,7 @@ class TestSlackEventEndpoint:
         assert resp.json() == {"challenge": "abc123"}
 
     def test_bot_self_message_ignored(self, slack_client):
+        """Test that bot's own messages are ignored."""
         client, mock = slack_client
         resp = client.post("/slack_event", json={
             "type": "event_callback",
@@ -133,6 +156,7 @@ class TestSlackEventEndpoint:
         mock.assert_not_called()
 
     def test_bot_mention_creates_pending_and_acknowledges(self, slack_client):
+        """Test that bot mention creates pending request and adds thumbsup reaction."""
         client, mock = slack_client
         resp = client.post("/slack_event", json=_mention_event())
         assert resp.status_code == 200
@@ -144,6 +168,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "9999"})
     def test_duplicate_event_deduplication(self, slack_client):
+        """Test that duplicate events are deduplicated within cooldown period."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(ts="dup.1"))
         mock.reset_mock()
@@ -155,6 +180,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "9999"})
     def test_message_edit_updates_pending_text(self, slack_client):
+        """Test that message edits update pending request text."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(ts="edit.1"))
         mock.reset_mock()
@@ -176,6 +202,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "9999"})
     def test_thread_reply_appends_to_pending(self, slack_client):
+        """Test that thread replies append to pending request."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(ts="reply.1"))
         mock.reset_mock()
@@ -198,6 +225,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "9999"})
     def test_thread_reply_with_files_appends_files(self, slack_client):
+        """Test that thread replies with file attachments append files to pending request."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(ts="file.1"))
         mock.reset_mock()
@@ -218,6 +246,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "9999"})
     def test_message_delete_removes_pending(self, slack_client):
+        """Test that message deletion removes pending request."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(ts="del.1"))
         mock.reset_mock()
@@ -235,6 +264,7 @@ class TestSlackEventEndpoint:
         assert resp.status_code == 200
 
     def test_timer_fire_dispatches_workflow(self, slack_client):
+        """Test that cooldown timer firing dispatches workflow and posts processing message."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(ts="fire.1"))
 
@@ -248,6 +278,7 @@ class TestSlackEventEndpoint:
         assert len(processing_calls) >= 1
 
     def test_unknown_workflow_posts_error(self, slack_client):
+        """Test that requesting unknown workflow posts error message to Slack."""
         client, mock = slack_client
         client.post("/slack_event", json=_mention_event(
             text="<@U_BOT> nonexistent_workflow hello",
@@ -264,6 +295,7 @@ class TestSlackEventEndpoint:
         assert len(error_calls) >= 1
 
     def test_unknown_event_type_returns_200(self, slack_client):
+        """Test that unknown event types are ignored and return 200."""
         client, mock = slack_client
         resp = client.post("/slack_event", json={
             "type": "event_callback",
@@ -275,6 +307,7 @@ class TestSlackEventEndpoint:
         assert resp.status_code == 200
 
     def test_thread_reply_without_pending_parent_ignored(self, slack_client):
+        """Test that thread replies without pending parent are ignored."""
         client, mock = slack_client
         resp = client.post("/slack_event", json={
             "type": "event_callback",
@@ -291,6 +324,7 @@ class TestSlackEventEndpoint:
         mock.assert_not_called()
 
     def test_missing_both_env_vars_returns_422(self, slack_client_no_env):
+        """Test that missing both SLACK_BOT_TOKEN and SLACK_BOT_USER_ID returns 422."""
         client = slack_client_no_env
         resp = client.post("/slack_event", json=_mention_event())
         assert resp.status_code == 422
@@ -300,6 +334,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_BOT_USER_ID": "U_BOT"})
     def test_missing_slack_bot_token_returns_422(self, slack_client_no_env):
+        """Test that missing SLACK_BOT_TOKEN returns 422 with appropriate error."""
         client = slack_client_no_env
         resp = client.post("/slack_event", json=_mention_event())
         assert resp.status_code == 422
@@ -309,6 +344,7 @@ class TestSlackEventEndpoint:
 
     @patch.dict(os.environ, {"SLACK_BOT_TOKEN": "xoxb-test"})
     def test_missing_slack_bot_user_id_returns_422(self, slack_client_no_env):
+        """Test that missing SLACK_BOT_USER_ID returns 422 with appropriate error."""
         client = slack_client_no_env
         resp = client.post("/slack_event", json=_mention_event())
         assert resp.status_code == 422
@@ -317,6 +353,7 @@ class TestSlackEventEndpoint:
         assert "SLACK_BOT_TOKEN" not in detail
 
     def test_url_verification_works_without_env_vars(self, slack_client_no_env):
+        """Test that URL verification works even without Slack environment variables."""
         client = slack_client_no_env
         resp = client.post("/slack_event", json={
             "type": "url_verification",

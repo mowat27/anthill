@@ -26,11 +26,10 @@ def is_bot_message(event: dict) -> bool:
     bot responds to its own messages.
 
     Args:
-        event: Slack event dictionary.
+        event: Slack event dictionary from the Events API.
 
     Returns:
-        True if the event contains a bot_id field, False otherwise.
-
+        bool: True if the event contains a bot_id field, False otherwise.
     """
     return bool(event.get("bot_id"))
 
@@ -38,13 +37,14 @@ def is_bot_message(event: dict) -> bool:
 def is_bot_mention(text: str, bot_user_id: str) -> bool:
     """Check if text contains a mention of the bot user.
 
+    Searches for Slack's mention format: <@USER_ID> in the message text.
+
     Args:
-        text: Message text to check.
-        bot_user_id: Slack user ID of the bot.
+        text: Message text to check for mentions.
+        bot_user_id: Slack user ID of the bot (e.g., "U12345678").
 
     Returns:
-        True if the text contains a mention of the bot user ID, False otherwise.
-
+        bool: True if the text contains a mention of the bot user ID, False otherwise.
     """
     return f"<@{bot_user_id}>" in text
 
@@ -52,12 +52,14 @@ def is_bot_mention(text: str, bot_user_id: str) -> bool:
 def strip_mention(text: str) -> str:
     """Remove bot mention from the beginning of text.
 
+    Uses regex to strip Slack mention format (<@U...>) and surrounding whitespace
+    from the start of the message.
+
     Args:
         text: Message text potentially containing a bot mention.
 
     Returns:
-        Text with leading bot mention and surrounding whitespace removed.
-
+        str: Text with leading bot mention and surrounding whitespace removed.
     """
     return re.sub(r"^\s*<@U[A-Z0-9]+>\s*", "", text)
 
@@ -92,17 +94,19 @@ class PendingMessage:
 async def slack_api(token: str, method: str, payload: dict) -> dict:
     """Call a Slack API method with the given payload.
 
+    Makes an asynchronous HTTP POST request to the specified Slack Web API method
+    with bearer token authentication.
+
     Args:
-        token: Slack bot token for authorization.
-        method: Slack API method name (e.g., "chat.postMessage").
+        token: Slack bot token for authorization (xoxb-...).
+        method: Slack API method name (e.g., "chat.postMessage", "reactions.add").
         payload: JSON payload to send in the request body.
 
     Returns:
-        JSON response from the Slack API as a dictionary.
+        dict: JSON response from the Slack API as a dictionary.
 
     Raises:
         httpx.HTTPError: If the HTTP request fails.
-
     """
     async with httpx.AsyncClient() as client:
         resp = await client.post(
@@ -132,7 +136,6 @@ class SlackEventProcessor:
 
         Args:
             antkeeper_app: Antkeeper App instance with registered workflow handlers.
-
         """
         self._app = antkeeper_app
         self._pending: dict[tuple[str, str], PendingMessage] = {}
@@ -147,9 +150,8 @@ class SlackEventProcessor:
             body: Slack Events API request body containing the event payload.
 
         Returns:
-            Dictionary response for Slack API. Contains {"ok": True} for success,
-            or {"challenge": "..."} for URL verification.
-
+            dict: Response dictionary for Slack API. Contains {"ok": True} for success,
+                or {"challenge": "..."} for URL verification.
         """
         if body.get("type") == "url_verification":
             return {"challenge": body["challenge"]}
@@ -199,8 +201,7 @@ class SlackEventProcessor:
             cooldown: Debounce cooldown period in seconds.
 
         Returns:
-            Dictionary response {"ok": True}.
-
+            dict: Response dictionary {"ok": True}.
         """
         key = (channel_id, event["thread_ts"])
         if key in self._pending:

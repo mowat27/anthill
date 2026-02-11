@@ -1,4 +1,8 @@
-"""Tests for the Slack channel implementation."""
+"""Tests for the Slack channel implementation.
+
+Verifies SlackChannel's HTTP-based messaging capabilities, error handling,
+and integration with the Slack API.
+"""
 from unittest.mock import patch, MagicMock
 
 import httpx
@@ -8,7 +12,17 @@ from antkeeper.channels.slack import SlackChannel
 
 
 class TestSlackChannel:
+    """Test suite for SlackChannel class."""
+
     def _make_channel(self, **overrides):
+        """Helper factory to create SlackChannel instances with test defaults.
+
+        Args:
+            **overrides: Override default channel configuration values.
+
+        Returns:
+            SlackChannel: Configured channel instance for testing.
+        """
         defaults: dict = {
             "workflow_name": "wf",
             "slack_token": "xoxb-test-token",
@@ -21,6 +35,7 @@ class TestSlackChannel:
         return SlackChannel(wf, state, **defaults)
 
     def test_slack_channel_type(self):
+        """Test that SlackChannel returns correct channel type."""
         channel = self._make_channel()
         assert channel.type == "slack"
 
@@ -29,11 +44,13 @@ class TestSlackChannel:
         (None, {}),
     ])
     def test_slack_channel_initial_state(self, initial_state, expected):
+        """Test that SlackChannel handles initial state correctly, defaulting to empty dict."""
         channel = self._make_channel(initial_state=initial_state)
         assert channel.initial_state == expected
 
     @patch("antkeeper.channels.slack.httpx.Client")
     def test_report_progress_posts_to_slack_thread(self, mock_client_cls):
+        """Test that progress messages are posted to Slack thread via API."""
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -53,6 +70,7 @@ class TestSlackChannel:
 
     @patch("antkeeper.channels.slack.httpx.Client")
     def test_report_error_posts_error_formatted_message(self, mock_client_cls):
+        """Test that error messages are posted with ERROR prefix formatting."""
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
         mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -65,6 +83,7 @@ class TestSlackChannel:
 
     @patch("antkeeper.channels.slack.httpx.Client")
     def test_report_progress_survives_http_failure(self, mock_client_cls):
+        """Test that HTTP failures during progress reporting are handled gracefully."""
         mock_client = MagicMock()
         mock_client.post.side_effect = httpx.HTTPError("connection failed")
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)

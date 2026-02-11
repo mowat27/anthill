@@ -100,11 +100,13 @@ class TestInitArgParsing:
         return parser
 
     def test_parse_init_defaults_path_to_dot(self):
+        """Test that init command defaults path to current directory."""
         args = self._build_parser().parse_args(["init"])
         assert args.command == "init"
         assert args.path == "."
 
     def test_parse_init_with_explicit_path(self):
+        """Test that init command accepts explicit path argument."""
         args = self._build_parser().parse_args(["init", "my_project"])
         assert args.path == "my_project"
 
@@ -113,6 +115,7 @@ class TestInitIntegration:
     """Integration tests for the init subcommand."""
 
     def test_init_creates_handlers_file(self, monkeypatch, capsys):
+        """Test that init command creates handlers.py file with boilerplate."""
         tmpdir = tempfile.mkdtemp()
         try:
             monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
@@ -129,6 +132,7 @@ class TestInitIntegration:
             os.rmdir(tmpdir)
 
     def test_init_prints_env_info(self, monkeypatch, capsys):
+        """Test that init command prints environment variable information."""
         tmpdir = tempfile.mkdtemp()
         try:
             monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
@@ -143,6 +147,7 @@ class TestInitIntegration:
             os.rmdir(tmpdir)
 
     def test_init_errors_if_handlers_exists(self, monkeypatch, capsys):
+        """Test that init command exits with error if handlers.py already exists."""
         tmpdir = tempfile.mkdtemp()
         handlers = os.path.join(tmpdir, "handlers.py")
         try:
@@ -160,6 +165,7 @@ class TestInitIntegration:
             os.rmdir(tmpdir)
 
     def test_init_default_path_uses_cwd(self, monkeypatch, capsys):
+        """Test that init command without path argument uses current working directory."""
         tmpdir = tempfile.mkdtemp()
         try:
             monkeypatch.chdir(tmpdir)
@@ -174,6 +180,7 @@ class TestInitIntegration:
             os.rmdir(tmpdir)
 
     def test_init_errors_if_directory_missing(self, monkeypatch, capsys):
+        """Test that init command exits with error if target directory doesn't exist."""
         tmpdir = tempfile.mkdtemp()
         os.rmdir(tmpdir)
         monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
