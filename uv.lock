@@ -25,46 +25,32 @@ name = "antkeeper"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "python-dotenv" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "fastapi" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-server = [
-    { name = "fastapi" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "fastapi" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "antkeeper", extras = ["server"], marker = "extra == 'all'" },
-    { name = "fastapi", marker = "extra == 'server'" },
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "python-dotenv" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'" },
+    { name = "uvicorn", extras = ["standard"] },
 ]
-provides-extras = ["server", "all"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "fastapi" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
-    { name = "uvicorn", extras = ["standard"] },
 ]
 
 [[package]]

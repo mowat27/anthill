@@ -12,14 +12,10 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Framework :: FastAPI",
 ]
-dependencies = ["python-dotenv", "httpx"]
-
-[project.optional-dependencies]
-server = ["fastapi", "uvicorn[standard]"]
-all = ["antkeeper[server]"]
+dependencies = ["python-dotenv", "httpx", "fastapi", "uvicorn[standard]"]
 
 [dependency-groups]
-dev = ["pytest", "fastapi", "uvicorn[standard]", "ruff", "ty"]
+dev = ["pytest", "ruff", "ty"]
 
 [project.urls]
 Homepage = "https://github.com/mowat27/antkeeper"
