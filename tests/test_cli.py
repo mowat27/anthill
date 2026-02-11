@@ -89,6 +89,108 @@ class TestArgParsing:
             self._build_parser().parse_args(["run"])
 
 
+class TestInitArgParsing:
+    """Test suite for init subcommand argument parsing."""
+
+    def _build_parser(self):
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        init_p = sub.add_parser("init")
+        init_p.add_argument("path", nargs="?", default=".")
+        return parser
+
+    def test_parse_init_defaults_path_to_dot(self):
+        """Test that init command defaults path to current directory."""
+        args = self._build_parser().parse_args(["init"])
+        assert args.command == "init"
+        assert args.path == "."
+
+    def test_parse_init_with_explicit_path(self):
+        """Test that init command accepts explicit path argument."""
+        args = self._build_parser().parse_args(["init", "my_project"])
+        assert args.path == "my_project"
+
+
+class TestInitIntegration:
+    """Integration tests for the init subcommand."""
+
+    def test_init_creates_handlers_file(self, monkeypatch, capsys):
+        """Test that init command creates handlers.py file with boilerplate."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
+            main()
+            target = os.path.join(tmpdir, "handlers.py")
+            assert os.path.exists(target)
+            content = open(target).read()
+            assert "app = App()" in content
+            assert "def healthcheck" in content
+        finally:
+            handlers = os.path.join(tmpdir, "handlers.py")
+            if os.path.exists(handlers):
+                os.unlink(handlers)
+            os.rmdir(tmpdir)
+
+    def test_init_prints_env_info(self, monkeypatch, capsys):
+        """Test that init command prints environment variable information."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
+            main()
+            captured = capsys.readouterr()
+            assert "Created handlers.py" in captured.out
+            assert "ANTKEEPER_HANDLERS_FILE" in captured.out
+        finally:
+            handlers = os.path.join(tmpdir, "handlers.py")
+            if os.path.exists(handlers):
+                os.unlink(handlers)
+            os.rmdir(tmpdir)
+
+    def test_init_errors_if_handlers_exists(self, monkeypatch, capsys):
+        """Test that init command exits with error if handlers.py already exists."""
+        tmpdir = tempfile.mkdtemp()
+        handlers = os.path.join(tmpdir, "handlers.py")
+        try:
+            with open(handlers, "w") as f:
+                f.write("# existing\n")
+            monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "already exists" in captured.err
+        finally:
+            if os.path.exists(handlers):
+                os.unlink(handlers)
+            os.rmdir(tmpdir)
+
+    def test_init_default_path_uses_cwd(self, monkeypatch, capsys):
+        """Test that init command without path argument uses current working directory."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            monkeypatch.chdir(tmpdir)
+            monkeypatch.setattr("sys.argv", ["antkeeper", "init"])
+            main()
+            target = os.path.join(tmpdir, "handlers.py")
+            assert os.path.exists(target)
+        finally:
+            handlers = os.path.join(tmpdir, "handlers.py")
+            if os.path.exists(handlers):
+                os.unlink(handlers)
+            os.rmdir(tmpdir)
+
+    def test_init_errors_if_directory_missing(self, monkeypatch, capsys):
+        """Test that init command exits with error if target directory doesn't exist."""
+        tmpdir = tempfile.mkdtemp()
+        os.rmdir(tmpdir)
+        monkeypatch.setattr("sys.argv", ["antkeeper", "init", tmpdir])
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "does not exist" in captured.err
+
+
 class TestCliIntegration:
     """Integration tests for end-to-end CLI workflow execution."""
 

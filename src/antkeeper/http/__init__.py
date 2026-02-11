@@ -11,9 +11,9 @@ from antkeeper.core.runner import Runner
 def run_workflow_background(runner: Runner) -> None:
     """Execute a workflow in the background, handling errors gracefully.
 
-    This function is designed to run as a background task. It catches
-    WorkflowFailedError silently (as it's expected) and logs unexpected
-    errors to stderr.
+    This function is designed to run as a background task in web servers
+    and async contexts. It catches WorkflowFailedError silently (as it's
+    an expected error when workflows fail) and logs unexpected errors to stderr.
 
     Args:
         runner: The Runner instance to execute.

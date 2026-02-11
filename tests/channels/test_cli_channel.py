@@ -10,6 +10,8 @@ from antkeeper.channels.cli import CliChannel
 
 
 class TestCliChannel:
+    """Test suite for CliChannel class."""
+
     @pytest.mark.parametrize("initial_state,expected", [
         ({"k": "v"}, {"k": "v"}),
         (None, {}),

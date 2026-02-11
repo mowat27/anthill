@@ -26,6 +26,7 @@ class ClaudeCodeAgent:
     Example:
         >>> agent = ClaudeCodeAgent(model="claude-opus-4")
         >>> response = agent.prompt("What is 2+2?")
+
     """
 
     def __init__(self, model: str | None = None) -> None:
@@ -34,6 +35,7 @@ class ClaudeCodeAgent:
         Args:
             model: Optional model identifier to pass to the Claude CLI
                 via the --model flag. If None, uses the CLI's default model.
+
         """
         self.model = model
         logger.debug(f"ClaudeCodeAgent initialized: model={self.model}")
@@ -54,6 +56,7 @@ class ClaudeCodeAgent:
         Raises:
             AgentExecutionError: If the claude binary is not found or if the
                 subprocess exits with a non-zero status code.
+
         """
         cmd = ["claude", "-p", prompt]
         if self.model:

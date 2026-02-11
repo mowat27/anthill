@@ -42,6 +42,8 @@ class TestAppConfiguration:
 
 
 class TestRunnerLogFileCreation:
+    """Test suite for log file and directory creation by Runner."""
+
     def test_runner_creates_log_directory(self, app, runner_factory):
         """Test that Runner creates the log directory if it doesn't exist."""
         runner, _ = runner_factory(app, "test")
@@ -58,6 +60,8 @@ class TestRunnerLogFileCreation:
 
 
 class TestLogContentAndFormat:
+    """Test suite for log file content formatting and structure."""
+
     def test_log_format_matches_expected_pattern(self, app, runner_factory):
         """Test that log lines match the expected timestamp/level/name format."""
         runner, _ = runner_factory(app, "test")
@@ -108,6 +112,8 @@ class TestLogContentAndFormat:
 
 
 class TestStepLogging:
+    """Test suite for logging of individual workflow steps."""
+
     def test_run_workflow_logs_steps(self, app, runner_factory):
         """Test that run_workflow logs INFO for each step and DEBUG for completion."""
         @app.handler
@@ -133,6 +139,8 @@ class TestStepLogging:
 
 
 class TestErrorLogging:
+    """Test suite for error logging behavior in Runner."""
+
     def test_runner_logs_error_at_error_level(self, app, runner_factory):
         """Test that exceptions in handlers produce ERROR log entries."""
         @app.handler
@@ -149,6 +157,8 @@ class TestErrorLogging:
 
 
 class TestLoggerIsolation:
+    """Test suite for ensuring logs don't leak to stdout/stderr."""
+
     def test_antkeeper_logger_does_not_leak_to_stdout(self, app, runner_factory, capsys):
         """Test that log output does not appear in stdout/stderr."""
         @app.handler

@@ -28,12 +28,11 @@ class App:
     to be defined as decorated functions and later executed by runners. Each app
     instance maintains its own handler registry and log directory configuration.
 
-    Typical usage:
-        app = App(log_dir="logs/")
-
-        @app.handler
-        def my_workflow(runner: Runner, state: State) -> State:
-            return {**state, "result": "done"}
+    Example:
+        >>> app = App(log_dir="logs/")
+        >>> @app.handler
+        ... def my_workflow(runner: Runner, state: State) -> State:
+        ...     return {**state, "result": "done"}
 
     Attributes:
         handlers: Dictionary mapping handler names to their functions.

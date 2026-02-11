@@ -56,7 +56,9 @@ class SlackChannel:
         """Post a message to the Slack thread.
 
         Uses synchronous httpx.Client to post messages to Slack via the
-        chat.postMessage API endpoint. Logs errors but does not raise exceptions.
+        chat.postMessage API endpoint. This is synchronous because handler
+        code runs in a threadpool via asyncio.to_thread. Logs errors but
+        does not raise exceptions.
 
         Args:
             text: Message text to post to the thread.

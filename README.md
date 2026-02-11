@@ -2,15 +2,50 @@
 
 A lightweight Python workflow engine. Define handlers (workflow steps) via a decorator-based `App`, wire them to a `Channel` (I/O boundary), and execute through a `Runner`. Designed for composable, testable pipelines.
 
+## Installation
+
+### From PyPI
+
+```bash
+# Core package (python-dotenv, httpx for Slack support)
+pip install antkeeper
+
+# With server support (adds FastAPI + uvicorn)
+pip install antkeeper[server]
+
+# All extras
+pip install antkeeper[all]
+```
+
+### From Source
+
+```bash
+# Clone the repository
+git clone https://github.com/mowat27/antkeeper.git
+cd antkeeper
+
+# Install with uv
+uv sync  # Development dependencies
+uv pip install .  # Core only
+uv pip install ".[all]"  # All extras
+```
+
 ## Requirements
 
 - Python >= 3.12
-- [uv](https://docs.astral.sh/uv/) package manager
+- [uv](https://docs.astral.sh/uv/) package manager (for development)
 
 ## Quickstart
 
 ```bash
-# Install dependencies
+# Create a new project with starter handlers
+antkeeper init my-project
+cd my-project
+
+# Run the healthcheck workflow
+antkeeper run healthcheck
+
+# Or manually install dependencies and create handlers
 uv sync
 
 # Run a workflow via CLI
@@ -29,7 +64,7 @@ antkeeper server --host 0.0.0.0 --port 8000 --agents-file handlers.py
 #   SLACK_BOT_TOKEN=xoxb-...
 #   SLACK_BOT_USER_ID=U...
 #   SLACK_COOLDOWN_SECONDS=5  (optional, default 5)
-#   ANTKEEPER_AGENTS_FILE=handlers.py  (optional)
+#   ANTKEEPER_HANDLERS_FILE=handlers.py  (optional)
 
 # Use just recipes for common workflows
 just sdlc "Add authentication" opus           # Standard SDLC workflow
@@ -220,6 +255,11 @@ Logs do not appear in stdout/stderr (propagation disabled).
 
 ### CLI Commands
 
+**antkeeper init** - Scaffold a new project:
+- `antkeeper init [path]` - Create a handlers.py file with starter workflows and examples (defaults to current directory)
+- Generates a working `healthcheck` handler, commented examples for workflow composition and worktree isolation
+- Prints guidance for environment variables (server and Slack integration)
+
 **antkeeper run** - Execute a workflow via CLI:
 - `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)
 - `--prompt <text>` - Prompt string to inject into initial state as `state["prompt"]`
@@ -293,6 +333,7 @@ The **CLI** (`src/antkeeper/cli.py`) is the entry point. It loads user-defined h
 ### Framework Documentation
 
 For detailed framework development documentation, see `app_docs/`:
+- `app_docs/releasing.md` - Packaging, dependency management, PyPI release process
 - `app_docs/testing_policy.md` - Testing approach, fixture management, patterns
 - `app_docs/instrumentation.md` - Logging, state persistence, error handling
 - `app_docs/http_server.md` - HTTP server architecture and endpoint design
