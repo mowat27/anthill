@@ -7,14 +7,8 @@ A lightweight Python workflow engine. Define handlers (workflow steps) via a dec
 ### From PyPI
 
 ```bash
-# Core package (python-dotenv, httpx for Slack support)
+# Install antkeeper (includes FastAPI, uvicorn, python-dotenv, httpx)
 pip install antkeeper
-
-# With server support (adds FastAPI + uvicorn)
-pip install antkeeper[server]
-
-# All extras
-pip install antkeeper[all]
 ```
 
 ### From Source
@@ -26,8 +20,7 @@ cd antkeeper
 
 # Install with uv
 uv sync  # Development dependencies
-uv pip install .  # Core only
-uv pip install ".[all]"  # All extras
+uv pip install .  # Core package
 ```
 
 ## Requirements
