@@ -21,18 +21,18 @@ class CliChannel:
     are written to stderr.
 
     Attributes:
-        type (str): Always "cli" to identify this channel type.
-        workflow_name (str): The name of the workflow being executed.
-        initial_state (State): The initial state dictionary for the workflow.
+        type: Always "cli" to identify this channel type.
+        workflow_name: The name of the workflow being executed.
+        initial_state: The initial state dictionary for the workflow.
     """
 
     def __init__(self, workflow_name: str, initial_state: dict[str, str] | None = None) -> None:
         """Initialize CLI channel with workflow configuration.
 
         Args:
-            workflow_name (str): Name of the workflow for display purposes and logging.
-            initial_state (dict[str, str] | None): Optional dictionary of initial state
-                key-value pairs. Defaults to an empty dict if not provided.
+            workflow_name: Name of the workflow for display purposes and logging.
+            initial_state: Optional dictionary of initial state key-value pairs.
+                Defaults to an empty dict if not provided.
         """
         self.type = "cli"
         self.workflow_name = workflow_name
@@ -43,9 +43,9 @@ class CliChannel:
         """Report workflow progress to stdout.
 
         Args:
-            run_id (str): Unique identifier for the workflow run.
-            message (str): Progress message to display.
-            **opts (Any): Additional keyword arguments passed to print().
+            run_id: Unique identifier for the workflow run.
+            message: Progress message to display.
+            **opts: Additional keyword arguments passed to print().
         """
         logger.debug(f"Progress [{run_id}]: {message}")
         message = f"[{self.workflow_name}, {run_id}] {message}"
@@ -55,8 +55,8 @@ class CliChannel:
         """Report workflow error to stderr.
 
         Args:
-            run_id (str): Unique identifier for the workflow run.
-            message (str): Error message to display.
+            run_id: Unique identifier for the workflow run.
+            message: Error message to display.
         """
         logger.debug(f"Error [{run_id}]: {message}")
         self.report_progress(run_id, message, file=sys.stderr)

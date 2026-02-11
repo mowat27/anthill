@@ -116,6 +116,57 @@ The route delegates to `handle_webhook()` in `webhook.py`:
 4. Add `run_workflow_background(runner)` as a FastAPI background task.
 5. Return the `run_id` immediately (HTTP 200).
 
+## POST /slack_event
+
+Slack Events API endpoint for receiving bot mentions and message events.
+
+### Environment Variable Validation
+
+The endpoint validates that required Slack environment variables are present before processing non-verification events:
+
+| Variable | Required | Description |
+|---|---|---|
+| `SLACK_BOT_TOKEN` | Yes | Bot User OAuth Token (starts with `xoxb-`). |
+| `SLACK_BOT_USER_ID` | Yes | Bot's Slack user ID (e.g. `U07ABC123`). |
+
+**Validation behavior:**
+
+- For `url_verification` requests: validation is skipped, allowing Slack to complete the initial app setup handshake even when environment variables are not yet configured.
+- For all other event types: if either variable is missing or empty, the endpoint returns HTTP 422 with a diagnostic message listing the missing variables.
+
+Example error response:
+
+```json
+{
+    "detail": "Missing required environment variables: SLACK_BOT_TOKEN, SLACK_BOT_USER_ID"
+}
+```
+
+The error message dynamically lists only the variables that are actually missing.
+
+### Request
+
+Slack sends JSON payloads with varying structures depending on event type. See the Slack Events API documentation for full schemas.
+
+### Response
+
+| Status | Condition | Body |
+|---|---|---|
+| 200 | URL verification | `{"challenge": "<value>"}` |
+| 200 | Event processed | `{"ok": true}` |
+| 422 | Missing env vars | `{"detail": "Missing required environment variables: ..."}` |
+
+### Execution Flow
+
+The route handler in `server.py` performs validation inline before delegating to `SlackEventProcessor.handle_event()`:
+
+1. Parse request body as JSON.
+2. Check if `body.type == "url_verification"`. If so, return challenge response immediately (skip env validation).
+3. Check if `SLACK_BOT_TOKEN` and `SLACK_BOT_USER_ID` are present and non-empty. If either is missing, raise HTTPException 422 with diagnostic message.
+4. Delegate to `slack.handle_event(body)` for event processing (bot filtering, debounce, workflow dispatch).
+
+This design ensures that misconfigured deployments fail fast with clear error messages while preserving the URL verification flow that Slack requires during initial app setup.
+
 ## Background Task Pattern
 
 Both `/webhook` and `/slack_event` use the shared `run_workflow_background()` function from `http/__init__.py` to execute workflows:

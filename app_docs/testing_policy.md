@@ -180,6 +180,21 @@ env_patch = patch.dict(os.environ, {
 })
 ```
 
+**Testing without environment variables** - Use a separate `slack_client_no_env` fixture to test behavior when environment variables are missing. This fixture creates a test client with only `SLACK_COOLDOWN_SECONDS` set, then explicitly pops `SLACK_BOT_TOKEN` and `SLACK_BOT_USER_ID` from `os.environ` after calling `create_app()`. This approach handles the case where `dotenv.load_dotenv()` might have loaded these variables from a `.env` file:
+
+```python
+@pytest.fixture
+def slack_client_no_env(self):
+    with patch.dict(os.environ, {"SLACK_COOLDOWN_SECONDS": "0"}):
+        app = create_app("tests/fixtures/handlers.py")
+        # Remove vars after create_app() in case dotenv loaded them
+        os.environ.pop("SLACK_BOT_TOKEN", None)
+        os.environ.pop("SLACK_BOT_USER_ID", None)
+        yield TestClient(app)
+```
+
+This pattern ensures clean isolation even when a `.env` file exists in the project directory.
+
 **Deterministic timers** - Set `SLACK_COOLDOWN_SECONDS=0` to eliminate debounce delays. For tests that verify debounce behavior (deduplication, edits, replies), override to a large value (`9999`) so the timer never fires during the test:
 
 ```python
@@ -190,7 +205,7 @@ def test_duplicate_event_deduplication(self, slack_client):
 
 **Timer task completion** - For tests that verify timer-fired workflow dispatch, use `time.sleep(0.2)` after sending the event to allow the background asyncio timer task to complete before asserting on mock calls.
 
-Tests cover: URL verification challenge response, bot self-message filtering, mention acknowledgement (reaction), event deduplication, message edit updates, thread reply appending (with and without files), message deletion, timer-fired workflow dispatch, unknown workflow error posting, unknown event type handling, and orphan thread reply filtering.
+Tests cover: URL verification challenge response (with and without env vars), environment variable validation (missing both, missing token only, missing user ID only), bot self-message filtering, mention acknowledgement (reaction), event deduplication, message edit updates, thread reply appending (with and without files), message deletion, timer-fired workflow dispatch, unknown workflow error posting, unknown event type handling, and orphan thread reply filtering.
 
 ## Fixture Management
 

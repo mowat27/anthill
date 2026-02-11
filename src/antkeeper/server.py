@@ -5,7 +5,7 @@ Defines all routes and delegates to library modules for implementation.
 import os
 
 import dotenv
-from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
 from antkeeper.cli import load_app
 from antkeeper.http.webhook import WebhookRequest, WebhookResponse, handle_webhook
@@ -57,6 +57,16 @@ def create_app(agents_file: str = os.environ.get("ANTKEEPER_AGENTS_FILE", "handl
             JSON response for Slack event processing (challenge response or acknowledgment).
         """
         body = await request.json()
+        if body.get("type") != "url_verification":
+            missing = [
+                var for var in ("SLACK_BOT_TOKEN", "SLACK_BOT_USER_ID")
+                if not os.environ.get(var, "")
+            ]
+            if missing:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Missing required environment variables: {', '.join(missing)}",
+                )
         return await slack.handle_event(body)
 
     return api
@@ -69,4 +79,8 @@ This is the ASGI application instance that should be passed to uvicorn or
 other ASGI servers. It is created by calling create_app() with default
 parameters (reading from ANTKEEPER_AGENTS_FILE environment variable or
 using "handlers.py" as the default agents file).
+
+Example:
+    Run with uvicorn:
+        uvicorn antkeeper.server:app --reload
 """

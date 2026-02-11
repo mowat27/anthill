@@ -52,6 +52,47 @@ def slack_client():
         os.unlink(agents_path)
 
 
+@pytest.fixture()
+def slack_client_no_env():
+    """Create a test client without SLACK_BOT_TOKEN or SLACK_BOT_USER_ID."""
+    log_dir = tempfile.mkdtemp()
+    state_dir = tempfile.mkdtemp()
+    agents_code = textwrap.dedent(f"""\
+        from antkeeper.core.app import App, run_workflow
+        from antkeeper.core.domain import State
+
+        app = App(log_dir="{log_dir}", state_dir="{state_dir}")
+
+        @app.handler
+        def greet(runner, state: State) -> State:
+            runner.report_progress("hello")
+            return {{**state, "greeted": True}}
+    """)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        f.write(agents_code)
+        f.flush()
+        agents_path = f.name
+
+    env_patch = patch.dict(os.environ, {
+        "SLACK_COOLDOWN_SECONDS": "0",
+    })
+    api_mock = AsyncMock(return_value={"ok": True})
+    slack_api_patch = patch("antkeeper.http.slack_events.slack_api", api_mock)
+
+    try:
+        env_patch.start()
+        slack_api_patch.start()
+        api = create_app(agents_path)
+        os.environ.pop("SLACK_BOT_TOKEN", None)
+        os.environ.pop("SLACK_BOT_USER_ID", None)
+        client = TestClient(api)
+        yield client
+    finally:
+        slack_api_patch.stop()
+        env_patch.stop()
+        os.unlink(agents_path)
+
+
 def _mention_event(text="<@U_BOT> greet hello", ts="1000.1", channel="C1", user="U_USER", files=None):
     """Helper to build a Slack app_mention event payload."""
     event = {
@@ -248,3 +289,38 @@ class TestSlackEventEndpoint:
         })
         assert resp.status_code == 200
         mock.assert_not_called()
+
+    def test_missing_both_env_vars_returns_422(self, slack_client_no_env):
+        client = slack_client_no_env
+        resp = client.post("/slack_event", json=_mention_event())
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "SLACK_BOT_TOKEN" in detail
+        assert "SLACK_BOT_USER_ID" in detail
+
+    @patch.dict(os.environ, {"SLACK_BOT_USER_ID": "U_BOT"})
+    def test_missing_slack_bot_token_returns_422(self, slack_client_no_env):
+        client = slack_client_no_env
+        resp = client.post("/slack_event", json=_mention_event())
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "SLACK_BOT_TOKEN" in detail
+        assert "SLACK_BOT_USER_ID" not in detail
+
+    @patch.dict(os.environ, {"SLACK_BOT_TOKEN": "xoxb-test"})
+    def test_missing_slack_bot_user_id_returns_422(self, slack_client_no_env):
+        client = slack_client_no_env
+        resp = client.post("/slack_event", json=_mention_event())
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "SLACK_BOT_USER_ID" in detail
+        assert "SLACK_BOT_TOKEN" not in detail
+
+    def test_url_verification_works_without_env_vars(self, slack_client_no_env):
+        client = slack_client_no_env
+        resp = client.post("/slack_event", json={
+            "type": "url_verification",
+            "challenge": "test-challenge",
+        })
+        assert resp.status_code == 200
+        assert resp.json() == {"challenge": "test-challenge"}

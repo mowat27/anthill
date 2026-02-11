@@ -1,6 +1,6 @@
 # Antkeeper Framework - Design Expertise
 # Mental model for the antkeeper workflow engine
-# Last validated: 2026-02-07
+# Last validated: 2026-02-10
 
 overview:
   name: antkeeper
@@ -405,8 +405,13 @@ server_module:
         2. load_app(agents_file) -> antkeeper App
         3. Creates FastAPI + SlackEventProcessor(antkeeper_app)
         4. Defines @api.post("/webhook") -> delegates to handle_webhook
-        5. Defines @api.post("/slack_event") -> delegates to slack.handle_event
+        5. Defines @api.post("/slack_event") -> env var guard + delegates to slack.handle_event
         6. Returns configured FastAPI
+      slack_event_env_guard: >
+        Before delegating to SlackEventProcessor, the /slack_event route validates
+        SLACK_BOT_TOKEN and SLACK_BOT_USER_ID are present and non-empty. Raises
+        HTTPException(422) listing missing vars. url_verification requests bypass
+        this guard (Slack sends these during initial app setup before tokens exist).
   module_level:
     app: "app = create_app()  # Default instance for uvicorn to import"
 
@@ -584,6 +589,7 @@ data_flow:
     - "Returns state with worktree_path and branch_name added"
   slack_happy_path:
     - "User @mentions bot in Slack channel with workflow name"
+    - "POST /slack_event validates SLACK_BOT_TOKEN + SLACK_BOT_USER_ID (422 if missing, url_verification exempt)"
     - "POST /slack_event receives event_callback, bot filters + mention detection"
     - "Creates PendingMessage, adds thumbsup reaction, starts debounce timer"
     - "User can edit message or reply in thread — timer resets, text/files accumulated"
@@ -604,6 +610,7 @@ data_flow:
     - "Entering non-existent worktree (create=False) -> WorktreeError"
     - "API unknown workflow -> HTTPException 404 before creating Runner"
     - "API invalid request body -> FastAPI auto-returns 422"
+    - "Slack missing env vars -> HTTPException 422 from route handler (url_verification exempt)"
 
 testing_design:
   philosophy: >
@@ -640,7 +647,7 @@ testing_design:
     - tests/test_cli.py — CLI arg parsing, mutual exclusion, prompt-file loading, WorkflowFailedError handling, integration
     - tests/test_server.py — FastAPI webhook endpoint (returns run_id, 404 for unknown workflow, 422 for invalid body)
     - tests/channels/test_slack_channel.py — SlackChannel type, initial_state, report_progress/error posts, HTTP failure resilience
-    - tests/test_slack_server.py — Slack event endpoint (url_verification, bot filter, mention, edit, reply, delete, timer dispatch, unknown workflow, dedup)
+    - tests/test_slack_server.py — Slack event endpoint (url_verification, bot filter, mention, edit, reply, delete, timer dispatch, unknown workflow, dedup, env var validation)
     - tests/llm/test_claude_code_agent.py — ClaudeCodeAgent subprocess and error handling
     - tests/helpers/test_extract_json.py — JSON extraction from LLM responses
     - tests/git/test_worktree.py — Worktree class (path, exists, create, create+branch, remove, errors)

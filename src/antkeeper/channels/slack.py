@@ -38,12 +38,11 @@ class SlackChannel:
         """Initialize a SlackChannel instance.
 
         Args:
-            workflow_name (str): Name of the workflow to execute.
-            initial_state (State | None): Optional initial state dictionary.
-                Defaults to empty dict.
-            slack_token (str): Slack bot token for API authentication.
-            channel_id (str): Slack channel ID where the workflow was triggered.
-            thread_ts (str): Timestamp of the thread to post messages to.
+            workflow_name: Name of the workflow to execute.
+            initial_state: Optional initial state dictionary. Defaults to empty dict.
+            slack_token: Slack bot token for API authentication.
+            channel_id: Slack channel ID where the workflow was triggered.
+            thread_ts: Timestamp of the thread to post messages to.
         """
         self.type = "slack"
         self.workflow_name = workflow_name
@@ -60,7 +59,7 @@ class SlackChannel:
         chat.postMessage API endpoint. Logs errors but does not raise exceptions.
 
         Args:
-            text (str): Message text to post to the thread.
+            text: Message text to post to the thread.
         """
         try:
             with httpx.Client() as client:
@@ -80,9 +79,9 @@ class SlackChannel:
         """Report workflow progress to the Slack thread.
 
         Args:
-            run_id (str): Unique identifier for the workflow run.
-            message (str): Progress message to post.
-            **opts (Any): Additional options (unused, for protocol compatibility).
+            run_id: Unique identifier for the workflow run.
+            message: Progress message to post.
+            **opts: Additional options (unused, for protocol compatibility).
         """
         self._post_to_thread(f"[{self.workflow_name}, {run_id}] {message}")
 
@@ -92,7 +91,7 @@ class SlackChannel:
         Posts an error message with [ERROR] prefix to the thread.
 
         Args:
-            run_id (str): Unique identifier for the workflow run.
-            message (str): Error message to post.
+            run_id: Unique identifier for the workflow run.
+            message: Error message to post.
         """
         self._post_to_thread(f"[{self.workflow_name}, {run_id}] [ERROR] {message}")

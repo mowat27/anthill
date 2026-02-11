@@ -32,11 +32,11 @@ Slack sends a `url_verification` challenge when you first set the Request URL. T
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `SLACK_BOT_TOKEN` | (empty string) | Bot User OAuth Token from Slack app settings (starts with `xoxb-`). Used for all Slack API calls. |
-| `SLACK_BOT_USER_ID` | (empty string) | The Slack user ID of the bot (e.g. `U07ABC123`). Used to detect @mentions in message text. Find this under the bot's profile in Slack. |
-| `SLACK_COOLDOWN_SECONDS` | `30` | Number of seconds to wait after the last interaction before dispatching the workflow. Resets on edits and thread replies. |
+| Variable | Default | Description | Required |
+|---|---|---|---|
+| `SLACK_BOT_TOKEN` | (empty string) | Bot User OAuth Token from Slack app settings (starts with `xoxb-`). Used for all Slack API calls. | Yes |
+| `SLACK_BOT_USER_ID` | (empty string) | The Slack user ID of the bot (e.g. `U07ABC123`). Used to detect @mentions in message text. Find this under the bot's profile in Slack. | Yes |
+| `SLACK_COOLDOWN_SECONDS` | `30` | Number of seconds to wait after the last interaction before dispatching the workflow. Resets on edits and thread replies. | No |
 
 ### .env File Support
 
@@ -47,6 +47,20 @@ SLACK_BOT_TOKEN=xoxb-your-token-here
 SLACK_BOT_USER_ID=U07ABC123
 SLACK_COOLDOWN_SECONDS=30
 ```
+
+### Environment Variable Validation
+
+The `/slack_event` endpoint validates that `SLACK_BOT_TOKEN` and `SLACK_BOT_USER_ID` are present and non-empty before processing events. If either variable is missing, the endpoint returns HTTP 422 with a diagnostic message:
+
+```json
+{
+    "detail": "Missing required environment variables: SLACK_BOT_TOKEN, SLACK_BOT_USER_ID"
+}
+```
+
+The error message lists only the variables that are actually missing (e.g., if only `SLACK_BOT_TOKEN` is missing, the message will say `"Missing required environment variables: SLACK_BOT_TOKEN"`).
+
+**Exception:** `url_verification` events bypass validation. This allows Slack to complete the initial app setup handshake before environment variables are configured. During URL verification, Slack sends a challenge payload that the endpoint must echo back, and this flow works regardless of env var state.
 
 ## Runtime Behaviour Flow
 
