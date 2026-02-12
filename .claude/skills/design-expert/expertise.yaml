@@ -1,6 +1,6 @@
 # Antkeeper Framework - Design Expertise
 # Mental model for the antkeeper workflow engine
-# Last validated: 2026-02-11
+# Last validated: 2026-02-12
 
 overview:
   name: antkeeper
@@ -27,8 +27,8 @@ overview:
     - ty (type-check)
   justfile_default: "check -> ruff, ty, test"
   justfile_recipes:
-    - "sdlc prompt model='opus' — runs sdlc workflow, auto-detects --prompt vs --prompt-file"
-    - "sdlc_iso prompt model='opus' — runs sdlc_iso workflow (worktree-isolated), same prompt detection"
+    - "sdlc prompt model='opus' — runs sdlc workflow; if prompt is a file, passes as positional arg; otherwise pipes via echo to stdin"
+    - "sdlc_iso prompt model='opus' — runs sdlc_iso workflow (worktree-isolated); same file-or-stdin prompt detection"
     - "server — runs antkeeper server with default settings"
     - "check_api host port — curl POST to /webhook for healthcheck"
 
@@ -310,12 +310,18 @@ llm_types:
   ClaudeCodeAgent:
     file: src/antkeeper/llm/claude_code.py
     satisfies: Agent protocol
-    construction: "ClaudeCodeAgent(model: str | None = None)"
+    construction: "ClaudeCodeAgent(model: str | None = None, yolo: bool = False, opts: list[str] | None = None)"
+    attributes:
+      - "model: str | None  # model identifier for --model flag"
+      - "yolo: bool  # when True, passes --dangerously-skip-permissions"
+      - "opts: list[str] | None  # extra CLI args; override convenience params when flags conflict"
     behavior:
       prompt: >
-        Runs `claude -p <prompt>` via subprocess. If model is set,
-        inserts `--model <model>` flag. Returns stdout on success.
-        Logs prompt submission, response, and errors via module logger.
+        Builds command: ['claude'] + [--model model] (if model set and not in opts)
+        + [--dangerously-skip-permissions] (if yolo and not in opts)
+        + opts + ['-p', prompt]. Runs via subprocess.
+        Returns stdout on success. Logs prompt submission, response, and errors
+        via module logger.
       errors:
         - "Non-zero exit -> AgentExecutionError with stderr"
         - "Missing binary -> AgentExecutionError('claude binary not found')"
@@ -370,16 +376,19 @@ cli_entry_point:
       args:
         - "--agents-file (default: handlers.py) — path to Python module exporting `app`"
         - "--initial-state key=val (repeatable) — seed state pairs"
-        - "--prompt — user prompt string, stored as state['prompt'] (mutually exclusive with --prompt-file)"
-        - "--prompt-file — path to file whose contents become state['prompt'] (mutually exclusive with --prompt)"
         - "--model — model identifier, stored as state['model']"
         - "workflow_name (positional) — workflow name to invoke"
-      mutual_exclusion: "--prompt and --prompt-file are in an argparse mutually exclusive group"
+        - "prompt_files (positional, nargs='*') — file paths whose contents are concatenated into state['prompt']"
+      prompt_resolution: >
+        Positional args replace the old --prompt/--prompt-file flags.
+        If prompt_files given, reads each via Path.read_text() and concatenates
+        into state['prompt']. If no files and stdin is piped (!sys.stdin.isatty()),
+        reads stdin into state['prompt']. If neither, no prompt is set.
       flow: >
         1. load_app() dynamically imports the agents file via importlib
         2. parse_state_pairs() splits key=val strings into dict
-        3. If --prompt provided, sets state['prompt'] to the string value
-        4. If --prompt-file provided, reads file via Path.read_text() into state['prompt']
+        3. If prompt_files provided, reads and concatenates file contents into state['prompt']
+        4. Else if stdin is piped, reads stdin into state['prompt']
         5. Merges --model into state dict if provided
         6. Builds CliChannel with workflow_name, initial_state=dict
         7. Creates Runner(app, channel) and calls runner.run()
@@ -389,7 +398,7 @@ cli_entry_point:
       error_handling:
         - "FileNotFoundError -> agents file not found"
         - "AttributeError -> agents file has no 'app'"
-        - "FileNotFoundError -> prompt file not found (--prompt-file)"
+        - "FileNotFoundError -> prompt file not found (positional arg)"
         - "Invalid state pair (no '=') -> stderr + exit(1)"
         - "WorkflowFailedError -> stderr + exit(1)"
 
@@ -679,7 +688,7 @@ testing_design:
     - tests/core/test_state_persistence.py — state file creation, naming format, content, per-step persistence, log/state filename correlation
     - tests/channels/test_cli_channel.py — CliChannel initial_state and attribute tests
     - tests/channels/test_api_channel.py — ApiChannel type, initial_state, stdout/stderr reporting
-    - tests/test_cli.py — CLI arg parsing, mutual exclusion, prompt-file loading, WorkflowFailedError handling, integration
+    - tests/test_cli.py — CLI arg parsing, positional prompt files, stdin prompt, WorkflowFailedError handling, integration
     - tests/test_server.py — FastAPI webhook endpoint (returns run_id, 404 for unknown workflow, 422 for invalid body)
     - tests/channels/test_slack_channel.py — SlackChannel type, initial_state, report_progress/error posts, HTTP failure resilience
     - tests/test_slack_server.py — Slack event endpoint (url_verification, bot filter, mention, edit, reply, delete, timer dispatch, unknown workflow, dedup, env var validation)
@@ -710,9 +719,11 @@ key_design_decisions:
     Agent is a Protocol, like Channel. New LLM backends implement prompt(str)->str.
     ClaudeCodeAgent delegates to the `claude` CLI via subprocess.
   - >
-    CLI passes --prompt (or --prompt-file) and --model into state dict.
-    --prompt and --prompt-file are mutually exclusive; file contents are
-    resolved in cli.py before reaching the channel. Handlers read from
+    CLI uses positional args for prompt input. Prompt files (one or many)
+    are passed as positional args after workflow_name; their contents are
+    concatenated into state['prompt']. If no files and stdin is piped,
+    stdin is read. --model sets state['model']. File/stdin resolution
+    happens in cli.py before reaching the channel. Handlers read from
     state, keeping the Runner/Channel layer unaware of LLM concerns.
   - >
     Errors propagate by default. Handler errors (missing keys), runtime issues

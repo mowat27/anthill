@@ -126,7 +126,33 @@ Module-level loggers exist in `cli.py`, `channels/cli.py`, `channels/slack.py`, 
 
 ## LLM Agent Execution
 
-The `ClaudeCodeAgent` reports subprocess execution failures via `AgentExecutionError`:
+The `ClaudeCodeAgent` provides flexible configuration for invoking the Claude CLI:
+
+```python
+from antkeeper.llm.claude_code import ClaudeCodeAgent
+
+# Basic usage with model selection
+agent = ClaudeCodeAgent(model="claude-opus-4")
+
+# Skip permissions prompts (yolo mode)
+agent = ClaudeCodeAgent(yolo=True)
+
+# Pass arbitrary CLI arguments
+agent = ClaudeCodeAgent(opts=["--verbose", "--max-tokens", "4096"])
+
+# Combine options (opts override convenience params)
+agent = ClaudeCodeAgent(model="sonnet", yolo=True, opts=["--fast"])
+```
+
+### Constructor Parameters
+
+- **model** (`str | None`): Model identifier passed as `--model` flag. If None, uses CLI default.
+- **yolo** (`bool`): When True, passes `--dangerously-skip-permissions` to skip permission prompts.
+- **opts** (`list[str] | None`): Arbitrary CLI arguments. When opts contains a flag that matches a convenience param (e.g., `--model`), the opts version takes precedence.
+
+### Error Handling
+
+The agent reports subprocess execution failures via `AgentExecutionError`:
 
 ```python
 try:

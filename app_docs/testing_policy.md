@@ -100,7 +100,7 @@ CLI tests are split into two categories:
 - Clean up temp files in `finally` blocks
 - Test error handling: CLI catches `WorkflowFailedError`, prints to stderr, exits with code 1
 
-For file-based inputs (e.g., `--prompt-file`), integration tests should write known content to a temp file and verify it flows through to the handler state.
+For file-based inputs (e.g., positional file arguments), integration tests should write known content to a temp file and verify it flows through to the handler state.
 
 ### API Channel Testing Patterns
 

@@ -5,6 +5,7 @@ CLI workflow execution with dynamic handler loading.
 """
 
 import argparse
+import io
 import os
 import tempfile
 import textwrap
@@ -46,22 +47,15 @@ class TestArgParsing:
         run_p = sub.add_parser("run")
         run_p.add_argument("--agents-file", default="handlers.py")
         run_p.add_argument("--initial-state", action="append", default=[])
-        prompt_group = run_p.add_mutually_exclusive_group()
-        prompt_group.add_argument("--prompt", default=None)
-        prompt_group.add_argument("--prompt-file", default=None)
         run_p.add_argument("--model", default=None)
         run_p.add_argument("workflow_name")
+        run_p.add_argument("prompt_files", nargs="*")
         return parser
 
     def test_parse_run_with_workflow_name(self):
         """Test that workflow_name positional argument is parsed."""
         args = self._build_parser().parse_args(["run", "my_handler"])
         assert args.workflow_name == "my_handler"
-
-    def test_parse_run_with_prompt_flag(self):
-        """Test that --prompt flag is parsed."""
-        args = self._build_parser().parse_args(["run", "--prompt", "build a widget", "my_handler"])
-        assert args.prompt == "build a widget"
 
     def test_parse_run_with_model_flag(self):
         """Test that --model flag is parsed."""
@@ -73,15 +67,10 @@ class TestArgParsing:
         args = self._build_parser().parse_args(["run", "--agents-file", "custom.py", "my_handler"])
         assert args.agents_file == "custom.py"
 
-    def test_parse_run_with_prompt_file_flag(self):
-        """Test that --prompt-file flag is parsed and file path is stored."""
-        args = self._build_parser().parse_args(["run", "--prompt-file", "foo.txt", "my_handler"])
-        assert args.prompt_file == "foo.txt"
-
-    def test_prompt_and_prompt_file_mutually_exclusive(self):
-        """Test that --prompt and --prompt-file are mutually exclusive arguments."""
-        with pytest.raises(SystemExit):
-            self._build_parser().parse_args(["run", "--prompt", "x", "--prompt-file", "y", "my_handler"])
+    def test_parse_run_with_prompt_files(self):
+        """Test that positional file args are captured in args.prompt_files."""
+        args = self._build_parser().parse_args(["run", "my_handler", "file1.md", "file2.md"])
+        assert args.prompt_files == ["file1.md", "file2.md"]
 
     def test_parse_run_missing_workflow_name_exits(self):
         """Test that missing workflow name argument causes parser to exit."""
@@ -213,6 +202,7 @@ class TestCliIntegration:
             agents_path = f.name
 
         try:
+            monkeypatch.setattr("sys.stdin.isatty", lambda: True)
             monkeypatch.setattr("sys.argv", [
                 "antkeeper", "run",
                 "--agents-file", agents_path,
@@ -226,7 +216,7 @@ class TestCliIntegration:
             os.unlink(agents_path)
 
     def test_prompt_file_loaded_into_state(self, monkeypatch, capsys):
-        """Test that --prompt-file reads file contents into state['prompt']."""
+        """Test that a positional file arg reads contents into state['prompt']."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
             from antkeeper.core.app import App
@@ -253,8 +243,7 @@ class TestCliIntegration:
             monkeypatch.setattr("sys.argv", [
                 "antkeeper", "run",
                 "--agents-file", agents_path,
-                "--prompt-file", prompt_path,
-                "echo",
+                "echo", prompt_path,
             ])
             main()
             captured = capsys.readouterr()
@@ -264,7 +253,7 @@ class TestCliIntegration:
             os.unlink(prompt_path)
 
     def test_prompt_file_not_found_exits(self, monkeypatch, capsys):
-        """Test that --prompt-file with nonexistent path prints error and exits 1."""
+        """Test that a nonexistent positional file path prints error and exits 1."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
             from antkeeper.core.app import App
@@ -285,19 +274,18 @@ class TestCliIntegration:
             monkeypatch.setattr("sys.argv", [
                 "antkeeper", "run",
                 "--agents-file", agents_path,
-                "--prompt-file", "/nonexistent/path/prompt.md",
-                "echo",
+                "echo", "/nonexistent/path.md",
             ])
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
             captured = capsys.readouterr()
-            assert "prompt file not found" in captured.err.lower()
+            assert "file not found" in captured.err.lower()
         finally:
             os.unlink(agents_path)
 
     def test_prompt_and_model_merged_into_state(self, monkeypatch, capsys):
-        """Test that --prompt and --model flags are merged into handler state."""
+        """Test that positional file and --model flag are merged into handler state."""
         log_dir = tempfile.mkdtemp()
         agents_code = textwrap.dedent(f"""\
             from antkeeper.core.app import App
@@ -314,18 +302,98 @@ class TestCliIntegration:
             f.flush()
             agents_path = f.name
 
+        prompt_content = "hello world"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as pf:
+            pf.write(prompt_content)
+            pf.flush()
+            prompt_path = pf.name
+
         try:
             monkeypatch.setattr("sys.argv", [
                 "antkeeper", "run",
                 "--agents-file", agents_path,
-                "--prompt", "hello world",
                 "--model", "opus",
-                "echo",
+                "echo", prompt_path,
             ])
             main()
             captured = capsys.readouterr()
             assert "prompt=hello world" in captured.out
             assert "model=opus" in captured.out
+        finally:
+            os.unlink(agents_path)
+            os.unlink(prompt_path)
+
+    def test_multiple_files_concatenated(self, monkeypatch, capsys):
+        """Test that multiple positional files are concatenated into state['prompt']."""
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
+
+            app = App(log_dir="{log_dir}")
+
+            @app.handler
+            def echo(runner, state: State) -> State:
+                return {{**state, "result": f"prompt={{state['prompt']}}"}}
+        """)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(agents_code)
+            f.flush()
+            agents_path = f.name
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f1:
+            f1.write("hello\n")
+            f1.flush()
+            path1 = f1.name
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f2:
+            f2.write("world\n")
+            f2.flush()
+            path2 = f2.name
+
+        try:
+            monkeypatch.setattr("sys.argv", [
+                "antkeeper", "run",
+                "--agents-file", agents_path,
+                "echo", path1, path2,
+            ])
+            main()
+            captured = capsys.readouterr()
+            assert "prompt=hello\\nworld\\n" in captured.out
+        finally:
+            os.unlink(agents_path)
+            os.unlink(path1)
+            os.unlink(path2)
+
+    def test_stdin_read_as_prompt(self, monkeypatch, capsys):
+        """Test that piped stdin content becomes state['prompt'] when no files provided."""
+        log_dir = tempfile.mkdtemp()
+        agents_code = textwrap.dedent(f"""\
+            from antkeeper.core.app import App
+            from antkeeper.core.domain import State
+
+            app = App(log_dir="{log_dir}")
+
+            @app.handler
+            def echo(runner, state: State) -> State:
+                return {{**state, "result": f"prompt={{state['prompt']}}"}}
+        """)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(agents_code)
+            f.flush()
+            agents_path = f.name
+
+        try:
+            monkeypatch.setattr("sys.stdin", io.StringIO("from stdin"))
+            monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+            monkeypatch.setattr("sys.argv", [
+                "antkeeper", "run",
+                "--agents-file", agents_path,
+                "echo",
+            ])
+            main()
+            captured = capsys.readouterr()
+            assert "prompt=from stdin" in captured.out
         finally:
             os.unlink(agents_path)
 
@@ -349,6 +417,7 @@ class TestCliIntegration:
             agents_path = f.name
 
         try:
+            monkeypatch.setattr("sys.stdin.isatty", lambda: True)
             monkeypatch.setattr("sys.argv", [
                 "antkeeper", "run",
                 "--agents-file", agents_path,
