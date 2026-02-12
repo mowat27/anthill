@@ -29,16 +29,28 @@ class ClaudeCodeAgent:
 
     """
 
-    def __init__(self, model: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str | None = None,
+        yolo: bool = False,
+        opts: list[str] | None = None,
+    ) -> None:
         """Initialize the Claude Code agent.
 
         Args:
             model: Optional model identifier to pass to the Claude CLI
                 via the --model flag. If None, uses the CLI's default model.
+            yolo: When True, passes --dangerously-skip-permissions to the CLI.
+            opts: Extra CLI arguments. Override convenience params when flags
+                conflict (e.g. opts=["--model", "opus"] overrides model="sonnet").
 
         """
         self.model = model
-        logger.debug(f"ClaudeCodeAgent initialized: model={self.model}")
+        self.yolo = yolo
+        self.opts = opts
+        logger.debug(
+            f"ClaudeCodeAgent initialized: model={self.model} yolo={self.yolo} opts={self.opts}"
+        )
 
     def prompt(self, prompt: str) -> str:
         """Execute a prompt via `claude -p` and return stdout.
@@ -58,9 +70,14 @@ class ClaudeCodeAgent:
                 subprocess exits with a non-zero status code.
 
         """
-        cmd = ["claude", "-p", prompt]
-        if self.model:
-            cmd[1:1] = ["--model", self.model]
+        opts_list = self.opts or []
+        cmd = ["claude"]
+        if self.model and "--model" not in opts_list:
+            cmd.extend(["--model", self.model])
+        if self.yolo and "--dangerously-skip-permissions" not in opts_list:
+            cmd.append("--dangerously-skip-permissions")
+        cmd.extend(opts_list)
+        cmd.extend(["-p", prompt])
         logger.info(f"LLM prompt submitted (length={len(prompt)} chars)")
         logger.debug(f"LLM prompt content: {prompt}")
         try:

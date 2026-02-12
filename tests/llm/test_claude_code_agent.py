@@ -78,6 +78,50 @@ class TestClaudeCodeAgent:
             call_args = mock_run.call_args[0][0]
             assert call_args == ["claude", "-p", ""]
 
+    def test_yolo_adds_permissions_flag(self):
+        """Test that yolo=True adds --dangerously-skip-permissions to command."""
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="ok", stderr=""
+            )
+            agent = ClaudeCodeAgent(yolo=True)
+            agent.prompt("hello")
+            call_args = mock_run.call_args[0][0]
+            assert "--dangerously-skip-permissions" in call_args
+
+    def test_opts_passed_to_command(self):
+        """Test that opts are included in the subprocess command."""
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="ok", stderr=""
+            )
+            agent = ClaudeCodeAgent(opts=["--verbose"])
+            agent.prompt("hello")
+            call_args = mock_run.call_args[0][0]
+            assert call_args == ["claude", "--verbose", "-p", "hello"]
+
+    def test_opts_override_convenience_params(self):
+        """Test that opts take precedence over convenience params."""
+        with patch("antkeeper.llm.claude_code.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="ok", stderr=""
+            )
+            agent = ClaudeCodeAgent(
+                model="sonnet",
+                yolo=True,
+                opts=["--model", "opus", "--dangerously-skip-permissions"],
+            )
+            agent.prompt("hello")
+            call_args = mock_run.call_args[0][0]
+            assert call_args == [
+                "claude",
+                "--model",
+                "opus",
+                "--dangerously-skip-permissions",
+                "-p",
+                "hello",
+            ]
+
 
 class TestIntegration:
     """Integration tests for agent execution within the framework."""
