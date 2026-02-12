@@ -64,6 +64,12 @@ from antkeeper import (
 
 Classes that depend on optional dependencies (`ApiChannel`) are included in the public API. They import successfully (they're just class definitions), but attempting to use them without the corresponding extras installed will fail at runtime when they try to import `fastapi`. `SlackChannel` is always available since `httpx` is a core dependency.
 
+**Namespace policy**: The top-level `antkeeper` namespace is reserved for high-level workflow constructs (App, Runner, Channel implementations, State). Lower-level utilities are accessed via submodules:
+- Git utilities: `from antkeeper.git import execute, current, GitCommandError`
+- LLM agents: `from antkeeper.llm.claude_code import ClaudeCodeAgent`
+
+This keeps the top-level API focused on the core framework concepts that most users need.
+
 ## Entry Points
 
 The package provides two entry points:

@@ -82,10 +82,13 @@ architecture:
       path: src/antkeeper/git/
       responsibility: >
         Git integration layer. Provides worktree management for isolated
-        workflow execution. Handlers use git worktrees to run SDLC steps
-        in separate working directories without affecting the main checkout.
+        workflow execution, low-level git command execution, and branch
+        utilities. Handlers use git worktrees to run SDLC steps in
+        separate working directories without affecting the main checkout.
       modules:
-        - __init__.py     # Re-exports Worktree, WorktreeError, git_worktree
+        - __init__.py     # Re-exports Worktree, WorktreeError, git_worktree, GitCommandError, execute, current
+        - core.py         # GitCommandError exception, execute() for running git subprocess commands
+        - branch.py       # current() — returns name of current git branch
         - worktrees.py    # Worktree class, WorktreeError, git_worktree context manager
 
     - name: helpers
@@ -143,8 +146,8 @@ architecture:
     File-based per-run logging via Python stdlib logging. Runner creates a
     per-run logger (antkeeper.run.<id>) writing to <app.log_dir>/<timestamp>-<id>.log.
     Module-level loggers exist in cli.py, channels/cli.py, llm/claude_code.py,
-    and git/worktrees.py for debug tracing. No console logging by default —
-    all framework logs go to files.
+    git/worktrees.py, and git/core.py for debug tracing. No console logging
+    by default — all framework logs go to files.
 
   state_persistence: >
     Automatic JSON-based state snapshots. Runner writes state to
@@ -246,6 +249,32 @@ core_objects:
       enabling mid-workflow state inspection and recovery.
 
 git_objects:
+  GitCommandError:
+    file: src/antkeeper/git/core.py
+    definition: "class GitCommandError(Exception)"
+    notes: >
+      Raised when a git subprocess command exits with non-zero status.
+      Carries stderr output as the error message. Used by execute() and
+      indirectly by branch.current().
+
+  execute:
+    file: src/antkeeper/git/core.py
+    signature: "execute(cmd: list[str]) -> str"
+    responsibility: >
+      Low-level git command runner. Takes a full command list (including
+      "git" prefix), runs via subprocess.run with capture_output=True,
+      returns stripped stdout on success, raises GitCommandError with
+      stderr on non-zero exit. Logging via module-level logger
+      (antkeeper.git.core).
+
+  current:
+    file: src/antkeeper/git/branch.py
+    signature: "current() -> str"
+    responsibility: >
+      Returns the name of the current git branch. Delegates to
+      execute(["git", "rev-parse", "--abbrev-ref", "HEAD"]). Returns
+      "HEAD" when in detached HEAD state.
+
   WorktreeError:
     file: src/antkeeper/git/worktrees.py
     definition: "class WorktreeError(Exception)"
@@ -581,6 +610,10 @@ handlers_file:
     SDLC_STEPS: "[specify, branch, implement, document]  # used by sdlc and specify_and_branch"
 
   workflows:
+    specify_implement:
+      description: "Partial SDLC: specify -> implement only"
+      steps: "run_workflow(runner, state, [specify, implement])"
+
     sdlc:
       description: "Composite workflow: specify -> branch -> implement -> document"
       steps: "run_workflow(runner, state, SDLC_STEPS)"
@@ -652,6 +685,7 @@ data_flow:
     - "Workflow exception -> Runner logs error, re-raises"
     - "Worktree creation failure -> WorktreeError propagates"
     - "Entering non-existent worktree (create=False) -> WorktreeError"
+    - "Git command failure -> GitCommandError propagates (from execute())"
     - "API unknown workflow -> HTTPException 404 before creating Runner"
     - "API invalid request body -> FastAPI auto-returns 422"
     - "Slack missing env vars -> HTTPException 422 from route handler (url_verification exempt)"
@@ -696,6 +730,8 @@ testing_design:
     - tests/helpers/test_extract_json.py — JSON extraction from LLM responses
     - tests/git/test_worktree.py — Worktree class (path, exists, create, create+branch, remove, errors)
     - tests/git/test_context.py — git_worktree context manager (create, cwd, yield, restore, remove)
+    - tests/git/test_core.py — execute() stdout capture, GitCommandError on failure, empty output handling
+    - tests/git/test_branch.py — current() default branch, switched branch, detached HEAD state
 
 key_design_decisions:
   - >
