@@ -136,12 +136,11 @@ def main() -> None:
                 (default: handlers.py)
             --initial-state: Key=value pairs for initial workflow state
                 (repeatable)
-            --prompt: User prompt to pass to the workflow
-                (mutually exclusive with --prompt-file)
-            --prompt-file: Path to file containing user prompt
-                (mutually exclusive with --prompt)
             --model: Model identifier to use for LLM operations
             workflow_name: Name of the workflow to execute (positional)
+            prompt_files: Optional file paths whose contents are concatenated
+                into state["prompt"]. If no files given and stdin is piped,
+                stdin is read as the prompt.
 
         server: Start the FastAPI server with the following options:
             --host: Host address to bind (default: 127.0.0.1)
@@ -156,8 +155,9 @@ def main() -> None:
 
     Examples:
         antkeeper run my_workflow
-        antkeeper run --agents-file=my_handlers.py --prompt="Hello" my_workflow
-        antkeeper run --prompt-file=prompt.md my_workflow
+        antkeeper run --model sonnet specify prompts/describe.md
+        antkeeper run --model sonnet specify file1.md file2.md
+        echo "describe this project" | antkeeper run --model sonnet specify
         antkeeper run --initial-state key1=val1 --initial-state key2=val2 my_workflow
         antkeeper server --host 0.0.0.0 --port 8000
     """
@@ -167,11 +167,9 @@ def main() -> None:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--agents-file", default="handlers.py")
     run_parser.add_argument("--initial-state", action="append", default=[])
-    prompt_group = run_parser.add_mutually_exclusive_group()
-    prompt_group.add_argument("--prompt", default=None)
-    prompt_group.add_argument("--prompt-file", default=None)
     run_parser.add_argument("--model", default=None)
     run_parser.add_argument("workflow_name")
+    run_parser.add_argument("prompt_files", nargs="*")
 
     server_parser = subparsers.add_parser("server")
     server_parser.add_argument("--host", default="127.0.0.1")
@@ -205,15 +203,18 @@ def main() -> None:
 
         logger.info(f"App loaded from {agents_file}")
         state = parse_state_pairs(args.initial_state)
-        if args.prompt is not None:
-            state["prompt"] = args.prompt
-        if args.prompt_file is not None:
-            try:
-                state["prompt"] = Path(args.prompt_file).read_text()
-            except FileNotFoundError:
-                logger.error(f"Prompt file not found: {args.prompt_file}")
-                print(f"Error: prompt file not found: {args.prompt_file}", file=sys.stderr)
-                sys.exit(1)
+        if args.prompt_files:
+            parts = []
+            for path in args.prompt_files:
+                try:
+                    parts.append(Path(path).read_text())
+                except FileNotFoundError:
+                    logger.error(f"File not found: {path}")
+                    print(f"Error: file not found: {path}", file=sys.stderr)
+                    sys.exit(1)
+            state["prompt"] = "".join(parts)
+        elif not sys.stdin.isatty():
+            state["prompt"] = sys.stdin.read()
         if args.model is not None:
             state["model"] = args.model
         channel = CliChannel(workflow_name=args.workflow_name, initial_state=state)

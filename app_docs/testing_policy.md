@@ -78,6 +78,8 @@ tests/
 ├── llm/               # Tests for src/antkeeper/llm/
 ├── git/               # Tests for src/antkeeper/git/
 │   ├── conftest.py    # git_repo fixture
+│   ├── test_core.py          # execute() function tests
+│   ├── test_branch.py        # current() function tests
 │   ├── test_worktree.py      # Worktree class tests
 │   └── test_context.py       # git_worktree context manager tests
 ├── test_cli.py        # Tests for src/antkeeper/cli.py
@@ -100,7 +102,7 @@ CLI tests are split into two categories:
 - Clean up temp files in `finally` blocks
 - Test error handling: CLI catches `WorkflowFailedError`, prints to stderr, exits with code 1
 
-For file-based inputs (e.g., `--prompt-file`), integration tests should write known content to a temp file and verify it flows through to the handler state.
+For file-based inputs (e.g., positional file arguments), integration tests should write known content to a temp file and verify it flows through to the handler state.
 
 ### API Channel Testing Patterns
 
@@ -215,7 +217,7 @@ All shared fixtures live in `tests/conftest.py`:
 - `TestChannel` - In-memory channel double for capturing I/O
 
 Git-specific fixtures live in `tests/git/conftest.py`:
-- `git_repo` - Creates a temp git repository with an initial commit, sets up git config (user.name, user.email), changes cwd into the repo, and restores original cwd on teardown. Use this for tests that exercise git worktree operations.
+- `git_repo` - Creates a temp git repository with an initial commit, sets up git config (user.name, user.email), changes cwd into the repo, and restores original cwd on teardown. Use this for tests that exercise git worktree operations, git branch operations, or any git command execution.
 
 Keep fixture scope minimal. Prefer function-scoped fixtures to session-scoped unless there's a compelling performance reason.
 
@@ -240,14 +242,55 @@ Tests for state persistence (`tests/core/test_state_persistence.py`) verify:
 - State persisted after each `run_workflow()` step
 - Handlers can read persisted state mid-workflow to verify persistence timing
 
-### Git Worktree Testing Patterns
+### Git Testing Patterns
 
-Tests for git worktree functionality should use the `git_repo` fixture from `tests/git/conftest.py`. This fixture:
+Tests for git functionality should use the `git_repo` fixture from `tests/git/conftest.py`. This fixture:
 - Creates a temp directory with a fully initialized git repository
 - Adds an initial commit (required for worktree operations)
 - Configures local git identity (user.name, user.email) for CI compatibility
 - Changes cwd into the repository for the test duration
 - Restores the original cwd on teardown
+
+#### Git Command Execution Tests
+
+Tests for `git.core.execute()` (`tests/git/test_core.py`) should verify:
+- Successful command execution returns stripped stdout
+- Failed commands raise `GitCommandError` with stderr
+- Empty stdout is returned as empty string (e.g., `git tag -l` with no tags)
+
+Example:
+```python
+def test_execute_returns_stdout(git_repo):
+    result = execute(["git", "log", "--oneline"])
+    assert isinstance(result, str)
+    assert len(result) > 0
+```
+
+#### Git Branch Tests
+
+Tests for `git.branch.current()` (`tests/git/test_branch.py`) should verify:
+- Returns default branch name (main or master, detected via subprocess for portability)
+- Returns switched branch name after `git checkout -b`
+- Returns "HEAD" when in detached HEAD state
+
+Example:
+```python
+def test_current_returns_default_branch(git_repo):
+    expected = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert current() == expected
+```
+
+#### Git Worktree Tests
+
+Tests for git worktree functionality should verify:
+- Worktree creation (with and without branch)
+- Cwd switching and restoration
+- Error handling for missing worktrees
+- Cleanup behavior (remove=True/False)
 
 Example:
 ```python
@@ -256,9 +299,3 @@ def test_worktree_create(git_repo):
     wt.create(branch="feat/new")
     assert wt.exists
 ```
-
-Tests for the `git_worktree` context manager should verify:
-- Worktree creation (with and without branch)
-- Cwd switching and restoration
-- Error handling for missing worktrees
-- Cleanup behavior (remove=True/False)

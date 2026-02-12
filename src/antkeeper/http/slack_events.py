@@ -234,8 +234,7 @@ class SlackEventProcessor:
             cooldown: Debounce cooldown period in seconds.
 
         Returns:
-            Dictionary response {"ok": True}.
-
+            dict: Response dictionary {"ok": True}.
         """
         nested = event.get("message", {})
         key = (channel_id, nested.get("ts", ""))
@@ -260,8 +259,7 @@ class SlackEventProcessor:
             channel_id: Slack channel ID where the message was deleted.
 
         Returns:
-            Dictionary response {"ok": True}.
-
+            dict: Response dictionary {"ok": True}.
         """
         key = (channel_id, event.get("deleted_ts", ""))
         if key in self._pending:
@@ -287,8 +285,7 @@ class SlackEventProcessor:
             cooldown: Debounce cooldown period in seconds.
 
         Returns:
-            Dictionary response {"ok": True}.
-
+            dict: Response dictionary {"ok": True}.
         """
         text = event.get("text", "")
         if is_bot_mention(text, bot_user_id):

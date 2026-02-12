@@ -22,15 +22,15 @@ check_api host="127.0.0.1" port="8000":
 sdlc prompt model="opus":
   #!/usr/bin/env bash
   if [ -f "{{prompt}}" ]; then
-    uv run antkeeper run sdlc --model {{model}} --prompt-file "{{prompt}}"
+    uv run antkeeper run --model {{model}} sdlc "{{prompt}}"
   else
-    uv run antkeeper run sdlc --model {{model}} --prompt "{{prompt}}"
+    echo "{{prompt}}" | uv run antkeeper run --model {{model}} sdlc
   fi
 
 sdlc_iso prompt model="opus":
   #!/usr/bin/env bash
   if [ -f "{{prompt}}" ]; then
-    uv run antkeeper run sdlc_iso --model {{model}} --prompt-file "{{prompt}}"
+    uv run antkeeper run --model {{model}} sdlc_iso "{{prompt}}"
   else
-    uv run antkeeper run sdlc_iso --model {{model}} --prompt "{{prompt}}"
+    echo "{{prompt}}" | uv run antkeeper run --model {{model}} sdlc_iso
   fi

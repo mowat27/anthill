@@ -44,11 +44,14 @@ uv sync
 # Run a workflow via CLI
 antkeeper run --agents-file handlers.py --initial-state result=5 plus_1
 
-# Run an LLM workflow with prompt and model
-antkeeper run --prompt "describe this project" --model sonnet specify
+# Run an LLM workflow with prompt from file
+antkeeper run --model sonnet specify prompts/describe.md
 
-# Run with prompt from file (mutually exclusive with --prompt)
-antkeeper run --prompt-file prompts/describe.md --model sonnet specify
+# Run with multiple prompt files (concatenated in order)
+antkeeper run --model sonnet specify file1.md file2.md
+
+# Run with prompt from stdin
+echo "describe this project" | antkeeper run --model sonnet specify
 
 # Start an API server to trigger workflows via HTTP
 antkeeper server --host 0.0.0.0 --port 8000 --agents-file handlers.py
@@ -76,7 +79,9 @@ src/antkeeper/
 │   ├── cli.py          # CLI channel adapter (stdout/stderr reporting)
 │   ├── api.py          # API channel adapter (server logging)
 │   └── slack.py        # Slack channel adapter (thread replies)
-├── git/                # Git worktree integration
+├── git/                # Git integration
+│   ├── core.py         # Low-level command execution (execute, GitCommandError)
+│   ├── branch.py       # Branch operations (current)
 │   └── worktrees.py    # Worktree class, git_worktree context manager
 ├── helpers/
 │   └── json.py         # JSON extraction utilities
@@ -100,7 +105,10 @@ src/antkeeper/
 - **Runner** — Execution engine. Binds an `App` + `Channel`, generates a `run_id`, and drives the workflow lifecycle. Persists state to `{timestamp}-{run_id}.json` in `app.state_dir`.
 - **run_workflow** — Composition helper. Folds state through a list of handler callables, enabling composite workflows without inheritance or a DAG scheduler.
 - **Agent** (Protocol) — LLM abstraction. Any object with a `prompt(str) -> str` method qualifies. Extension point for new LLM backends.
-- **ClaudeCodeAgent** — Concrete `Agent` implementation. Delegates prompts to the `claude` CLI via subprocess. Accepts an optional `model` parameter.
+- **ClaudeCodeAgent** — Concrete `Agent` implementation. Delegates prompts to the `claude` CLI via subprocess. Accepts optional `model`, `yolo` (skip permissions), and `opts` (arbitrary CLI args) parameters.
+- **execute** — Low-level git command execution. Takes a command list (e.g., `["git", "status"]`), returns stripped stdout, raises `GitCommandError` on failure. Logs commands at debug level.
+- **current** — Returns current branch name (or "HEAD" if detached). Delegates to `execute(["git", "rev-parse", "--abbrev-ref", "HEAD"])`.
+- **GitCommandError** — Exception raised when git commands fail with non-zero exit codes. Contains stderr as message.
 - **Worktree** — Git worktree wrapper. Provides `create()`, `remove()`, and `exists` for managing isolated git working directories. Paths are absolute for safety after cwd changes.
 - **git_worktree** — Context manager that enters a worktree, guarantees cwd restoration via try/finally, and optionally creates/removes the worktree.
 - **SlackChannel** — Channel implementation that posts workflow progress and results to Slack threads via the Slack API.
@@ -160,7 +168,11 @@ from antkeeper.llm.claude_code import ClaudeCodeAgent
 
 @app.handler
 def ask_llm(runner: Runner, state: State) -> State:
-    agent = ClaudeCodeAgent(model=state.get("model"))
+    agent = ClaudeCodeAgent(
+        model=state.get("model"),
+        yolo=state.get("skip_permissions", False),
+        opts=state.get("claude_opts")
+    )
     response = agent.prompt(state["prompt"])
     return {**state, "result": response}
 ```
@@ -202,11 +214,27 @@ Registering the individual steps with `@app.handler` is optional, but doing so a
 antkeeper run --agents-file handlers.py --initial-state raw_data='[1, 2, 3]' transform
 ```
 
-Handlers can isolate work in git worktrees:
+Handlers can use git utilities:
 
 ```python
-from antkeeper.git import Worktree, git_worktree
+from antkeeper.git import execute, current, GitCommandError, Worktree, git_worktree
 from datetime import datetime
+
+@app.handler
+def git_operations(runner: Runner, state: State) -> State:
+    # Get current branch
+    branch = current()
+
+    # Execute arbitrary git commands
+    status = execute(["git", "status", "--short"])
+
+    # Handle git errors
+    try:
+        execute(["git", "checkout", "nonexistent"])
+    except GitCommandError as e:
+        runner.report_error(f"Git failed: {e}")
+
+    return {**state, "branch": branch, "status": status}
 
 @app.handler
 def isolated_workflow(runner: Runner, state: State) -> State:
@@ -255,10 +283,10 @@ Logs do not appear in stdout/stderr (propagation disabled).
 
 **antkeeper run** - Execute a workflow via CLI:
 - `--agents-file <path>` - Python file exporting `app` (default: `handlers.py`)
-- `--prompt <text>` - Prompt string to inject into initial state as `state["prompt"]`
-- `--prompt-file <path>` - Read prompt from file (mutually exclusive with `--prompt`)
 - `--model <name>` - Model name to inject as `state["model"]` (e.g., `opus`, `sonnet`)
 - `--initial-state key=value` - Set additional state keys (repeatable)
+- Positional file args after `workflow_name` are read and concatenated into `state["prompt"]`
+- If no files provided and stdin is piped, stdin is read as the prompt
 
 **antkeeper server** - Start FastAPI webhook server:
 - `--host <host>` - Bind address (default: `127.0.0.1`)
@@ -319,9 +347,9 @@ The **http layer** (`src/antkeeper/http/`) contains HTTP endpoint logic:
 
 The **llm layer** (`src/antkeeper/llm/`) abstracts LLM interactions behind the `Agent` protocol. `ClaudeCodeAgent` is the concrete implementation. Add new LLM backends by implementing `prompt(str) -> str`.
 
-The **git layer** (`src/antkeeper/git/`) provides git worktree support for isolated workflow execution. The `Worktree` class wraps git subprocess operations, and `git_worktree` context manager guarantees cwd restoration.
+The **git layer** (`src/antkeeper/git/`) provides git integration for workflows. `core.py` exports `execute()` for low-level command execution and `GitCommandError` for failures. `branch.py` exports `current()` for getting the current branch name. `worktrees.py` provides the `Worktree` class and `git_worktree` context manager for isolated execution in separate working directories.
 
-The **CLI** (`src/antkeeper/cli.py`) is the entry point. It loads user-defined handlers from a Python file (default: `handlers.py`) and wires everything together. Supports `--prompt` and `--prompt-file` (mutually exclusive) for injecting prompts into state.
+The **CLI** (`src/antkeeper/cli.py`) is the entry point. It loads user-defined handlers from a Python file (default: `handlers.py`) and wires everything together. Supports positional file args and stdin piping for injecting prompts into state.
 
 ### Framework Documentation
 

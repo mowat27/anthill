@@ -174,6 +174,20 @@ SDLC_STEPS = [specify, branch, implement, document]
 
 
 @app.handler
+def specify_implement(runner: Runner, state: State) -> State:
+    """Run partial SDLC workflow: specify -> implement.
+
+    Args:
+        runner: The Runner instance executing the workflow.
+        state: Current workflow state dictionary. Must contain "prompt" key.
+
+    Returns:
+        State after specify and implement steps have been executed.
+    """
+    return run_workflow(runner, state, [specify, implement])
+
+
+@app.handler
 def sdlc(runner: Runner, state: State) -> State:
     """Run the full SDLC workflow: specify -> branch -> implement -> document.
 

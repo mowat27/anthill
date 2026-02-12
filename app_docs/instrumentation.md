@@ -126,7 +126,33 @@ Module-level loggers exist in `cli.py`, `channels/cli.py`, `channels/slack.py`, 
 
 ## LLM Agent Execution
 
-The `ClaudeCodeAgent` reports subprocess execution failures via `AgentExecutionError`:
+The `ClaudeCodeAgent` provides flexible configuration for invoking the Claude CLI:
+
+```python
+from antkeeper.llm.claude_code import ClaudeCodeAgent
+
+# Basic usage with model selection
+agent = ClaudeCodeAgent(model="claude-opus-4")
+
+# Skip permissions prompts (yolo mode)
+agent = ClaudeCodeAgent(yolo=True)
+
+# Pass arbitrary CLI arguments
+agent = ClaudeCodeAgent(opts=["--verbose", "--max-tokens", "4096"])
+
+# Combine options (opts override convenience params)
+agent = ClaudeCodeAgent(model="sonnet", yolo=True, opts=["--fast"])
+```
+
+### Constructor Parameters
+
+- **model** (`str | None`): Model identifier passed as `--model` flag. If None, uses CLI default.
+- **yolo** (`bool`): When True, passes `--dangerously-skip-permissions` to skip permission prompts.
+- **opts** (`list[str] | None`): Arbitrary CLI arguments. When opts contains a flag that matches a convenience param (e.g., `--model`), the opts version takes precedence.
+
+### Error Handling
+
+The agent reports subprocess execution failures via `AgentExecutionError`:
 
 ```python
 try:
@@ -137,11 +163,57 @@ except AgentExecutionError as e:
 
 No automatic retry or telemetry. Handlers are responsible for error handling policy.
 
-## Git Worktree Isolation
+## Git Integration
 
-The `antkeeper.git` module provides git worktree support for isolating workflow execution in separate working directories.
+The `antkeeper.git` module provides git utilities for workflow execution, including low-level command execution, branch operations, and worktree isolation.
 
-### Configuration
+### Git Command Execution
+
+The `git.core` module provides low-level command execution:
+
+```python
+from antkeeper.git import execute, GitCommandError
+
+# Execute any git command (git prefix is auto-prepended if missing)
+output = execute(["status"])
+output = execute(["log", "--oneline", "-n", "5"])
+
+# Explicit prefix still works
+output = execute(["git", "status"])
+
+# Raises GitCommandError on non-zero exit
+try:
+    execute(["checkout", "nonexistent-branch"])
+except GitCommandError as e:
+    runner.fail(f"Git command failed: {e}")
+```
+
+The `execute()` function:
+- Automatically prepends `"git"` if not present; accepts commands with or without the prefix
+- Returns stripped stdout on success
+- Raises `GitCommandError` with stderr on failure
+- Logs commands at debug level via `antkeeper.git.core` logger
+- Returns empty string for successful commands with no output
+
+**Design principle**: No input validation for impossible scenarios. The function delegates directly to `subprocess.run()`, which naturally handles edge cases like empty command lists. This follows the framework philosophy of avoiding validation for scenarios that can't happen in practice.
+
+### Branch Operations
+
+The `git.branch` module provides high-level branch utilities:
+
+```python
+from antkeeper.git import current
+
+# Get current branch name
+branch_name = current()  # "main", "feat/new-feature", or "HEAD" (detached)
+```
+
+The `current()` function:
+- Returns current branch name or "HEAD" if in detached HEAD state
+- Delegates to `execute(["rev-parse", "--abbrev-ref", "HEAD"])`
+- Propagates `GitCommandError` on failure
+
+### Worktree Configuration
 
 ```python
 app = App(worktree_dir="trees/")  # custom directory
@@ -208,11 +280,23 @@ This allows matching worktrees to their log files via the run_id.
 
 ### Error Handling
 
-Git operations raise `WorktreeError` on failure:
+Git operations raise specific exceptions based on their failure domain:
+
+- **GitCommandError** - Raised by `execute()` and propagates through `current()`. Indicates a git command failed with non-zero exit code.
+- **WorktreeError** - Raised by `Worktree` class methods and `git_worktree` context manager. Indicates worktree-specific failures.
+
+These exceptions are intentionally separate to represent different failure domains:
 
 ```python
-from antkeeper.git import WorktreeError
+from antkeeper.git import GitCommandError, WorktreeError
 
+# Handle command execution failures
+try:
+    execute(["checkout", "nonexistent"])
+except GitCommandError as e:
+    runner.fail(f"Git command failed: {e}")
+
+# Handle worktree operation failures
 try:
     wt.create(branch="feat/x")
 except WorktreeError as e:
