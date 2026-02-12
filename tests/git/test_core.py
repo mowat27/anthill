@@ -57,3 +57,31 @@ class TestExecute:
         """
         result = execute(["git", "tag", "-l"])
         assert result == ""
+
+    def test_execute_prepends_git_when_not_present(self, git_repo):
+        """Test that execute() auto-prepends 'git' when not present in command.
+
+        Args:
+            git_repo: Pytest fixture providing a temporary Git repository.
+        """
+        result = execute(["log", "--oneline"])
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_execute_without_git_prefix_raises_on_failure(self, git_repo):
+        """Test that execute() raises GitCommandError without 'git' prefix.
+
+        Args:
+            git_repo: Pytest fixture providing a temporary Git repository.
+        """
+        with pytest.raises(GitCommandError):
+            execute(["checkout", "nonexistent-branch"])
+
+    def test_execute_without_git_prefix_returns_empty_string(self, git_repo):
+        """Test that execute() returns empty string without 'git' prefix.
+
+        Args:
+            git_repo: Pytest fixture providing a temporary Git repository.
+        """
+        result = execute(["tag", "-l"])
+        assert result == ""

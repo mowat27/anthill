@@ -174,19 +174,22 @@ The `git.core` module provides low-level command execution:
 ```python
 from antkeeper.git import execute, GitCommandError
 
-# Execute any git command
+# Execute any git command (git prefix is auto-prepended if missing)
+output = execute(["status"])
+output = execute(["log", "--oneline", "-n", "5"])
+
+# Explicit prefix still works
 output = execute(["git", "status"])
-output = execute(["git", "log", "--oneline", "-n", "5"])
 
 # Raises GitCommandError on non-zero exit
 try:
-    execute(["git", "checkout", "nonexistent-branch"])
+    execute(["checkout", "nonexistent-branch"])
 except GitCommandError as e:
     runner.fail(f"Git command failed: {e}")
 ```
 
 The `execute()` function:
-- Takes full command as list including `"git"` prefix (no magic prefixing)
+- Automatically prepends `"git"` if not present; accepts commands with or without the prefix
 - Returns stripped stdout on success
 - Raises `GitCommandError` with stderr on failure
 - Logs commands at debug level via `antkeeper.git.core` logger
@@ -207,7 +210,7 @@ branch_name = current()  # "main", "feat/new-feature", or "HEAD" (detached)
 
 The `current()` function:
 - Returns current branch name or "HEAD" if in detached HEAD state
-- Delegates to `execute(["git", "rev-parse", "--abbrev-ref", "HEAD"])`
+- Delegates to `execute(["rev-parse", "--abbrev-ref", "HEAD"])`
 - Propagates `GitCommandError` on failure
 
 ### Worktree Configuration
@@ -289,7 +292,7 @@ from antkeeper.git import GitCommandError, WorktreeError
 
 # Handle command execution failures
 try:
-    execute(["git", "checkout", "nonexistent"])
+    execute(["checkout", "nonexistent"])
 except GitCommandError as e:
     runner.fail(f"Git command failed: {e}")
 

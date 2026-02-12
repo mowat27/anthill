@@ -16,4 +16,4 @@ def current() -> str:
     Raises:
         GitCommandError: If the git command fails.
     """
-    return execute(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    return execute(["rev-parse", "--abbrev-ref", "HEAD"])

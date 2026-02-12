@@ -21,9 +21,12 @@ class GitCommandError(Exception):
 def execute(cmd: list[str]) -> str:
     """Execute a git command and return its stdout.
 
+    Automatically prepends "git" if not already present, so both
+    ``execute(["status"])`` and ``execute(["git", "status"])`` work.
+
     Args:
-        cmd (list[str]): The full command to execute, including the "git" prefix
-            (e.g., ["git", "status"]).
+        cmd (list[str]): The command to execute. The "git" prefix is optional
+            and will be auto-prepended if missing (e.g., ["status"] or ["git", "status"]).
 
     Returns:
         str: The stripped stdout output from the command.
@@ -31,6 +34,8 @@ def execute(cmd: list[str]) -> str:
     Raises:
         GitCommandError: If the command exits with a non-zero return code.
     """
+    if cmd[0] != "git":
+        cmd = ["git"] + cmd
     logger.debug(f"Executing: {cmd}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
